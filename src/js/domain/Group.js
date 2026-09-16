@@ -6,6 +6,7 @@ export class Group {
 
     this.id = options.id ?? crypto.randomUUID();
     this.name = name.trim();
+    this.active = options.active ?? true;
     this.createdAt = options.createdAt ?? new Date().toISOString();
 
     Object.freeze(this);
