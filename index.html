@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./src/css/styles.css" />
+  <link rel="stylesheet" href="./src/css/management.css" />
 </head>
 <body>
   <main class="app-shell">
@@ -45,7 +46,7 @@
         <div>
           <span class="section-kicker">PASSO 1</span>
           <h2>Qual é a sua patota?</h2>
-          <p>Crie uma nova ou escolha uma já cadastrada. Ela será usada nos próximos passos.</p>
+          <p>Crie uma nova ou escolha uma já cadastrada. Patotas inativas continuam preservadas e podem ser reativadas.</p>
         </div>
       </div>
 
@@ -65,10 +66,14 @@
         </article>
 
         <article class="panel">
-          <div class="panel-heading">
+          <div class="panel-heading management-heading">
             <div>
-              <span class="section-kicker">JÁ CADASTRADAS</span>
-              <h3>Escolher uma patota</h3>
+              <span class="section-kicker">PATOTAS</span>
+              <h3>Gerenciar patotas</h3>
+            </div>
+            <div class="status-filter" aria-label="Filtrar patotas">
+              <button class="status-filter__button is-active" type="button" data-group-filter="active">Ativas</button>
+              <button class="status-filter__button" type="button" data-group-filter="inactive">Inativas</button>
             </div>
           </div>
           <div id="groups-list" class="card-list"></div>
@@ -89,13 +94,13 @@
           <div>
             <span class="section-kicker">PASSO 2</span>
             <h2>Jogadores de <span id="players-group-name"></span></h2>
-            <p>Todo novo jogador cadastrado aqui entra automaticamente nesta patota.</p>
+            <p>Inativar preserva o histórico. Remover da patota afeta somente este grupo.</p>
           </div>
           <button class="button button--secondary" type="button" data-go-to="draw">Ir para o sorteio</button>
         </div>
 
         <div class="stats-row">
-          <div class="stat-card"><span>Total</span><strong id="players-total-count">0</strong></div>
+          <div class="stat-card"><span>Ativos</span><strong id="players-total-count">0</strong></div>
           <div class="stat-card stat-card--left"><span>Esquerdas</span><strong id="players-left-count">0</strong></div>
           <div class="stat-card stat-card--right"><span>Direitas</span><strong id="players-right-count">0</strong></div>
         </div>
@@ -122,10 +127,14 @@
           </article>
 
           <article class="panel">
-            <div class="panel-heading">
+            <div class="panel-heading management-heading">
               <div>
                 <span class="section-kicker">NA PATOTA</span>
-                <h3>Jogadores cadastrados</h3>
+                <h3>Gerenciar jogadores</h3>
+              </div>
+              <div class="status-filter" aria-label="Filtrar jogadores">
+                <button class="status-filter__button is-active" type="button" data-player-filter="active">Ativos</button>
+                <button class="status-filter__button" type="button" data-player-filter="inactive">Inativos</button>
               </div>
             </div>
 
