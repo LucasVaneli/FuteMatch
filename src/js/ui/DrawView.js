@@ -4,7 +4,7 @@ export class DrawView {
     pairsList,
     pairTemplate,
     errorElement,
-    playerInputs,
+    playerInputs = [],
   }) {
     this.resultsSection = resultsSection;
     this.pairsList = pairsList;
@@ -18,21 +18,14 @@ export class DrawView {
 
     pairs.forEach((pair, index) => {
       const fragment = this.pairTemplate.content.cloneNode(true);
-
-      fragment.querySelector(".pair-number").textContent = `0${index + 1}`;
-      fragment.querySelector(".left-player-name").textContent =
-        pair.leftPlayer.name;
-      fragment.querySelector(".right-player-name").textContent =
-        pair.rightPlayer.name;
-
+      fragment.querySelector(".pair-number").textContent = String(index + 1).padStart(2, "0");
+      fragment.querySelector(".left-player-name").textContent = pair.leftPlayer.name;
+      fragment.querySelector(".right-player-name").textContent = pair.rightPlayer.name;
       this.pairsList.append(fragment);
     });
 
     this.resultsSection.classList.remove("is-hidden");
-    this.resultsSection.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
+    this.resultsSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   showError(message) {
@@ -48,15 +41,7 @@ export class DrawView {
     this.resultsSection.classList.add("is-hidden");
   }
 
-  markEmptyInputsAsInvalid() {
-    this.playerInputs.forEach((input) => {
-      input.classList.toggle("input--invalid", !input.value.trim());
-    });
-  }
-
   clearInputValidation() {
-    this.playerInputs.forEach((input) => {
-      input.classList.remove("input--invalid");
-    });
+    this.playerInputs.forEach((input) => input.classList.remove("input--invalid"));
   }
 }
