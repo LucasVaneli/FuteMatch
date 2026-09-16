@@ -1,0 +1,123 @@
+.management-heading {
+  align-items: center;
+}
+
+.status-filter {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(3, 10, 18, 0.34);
+}
+
+.status-filter__button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 13px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.status-filter__button.is-active {
+  background: rgba(255, 207, 51, 0.12);
+  color: var(--primary);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.button--danger-ghost {
+  border: 1px solid rgba(255, 107, 107, 0.28);
+  background: rgba(255, 107, 107, 0.06);
+  color: var(--danger);
+}
+
+.button--danger-ghost:hover {
+  background: rgba(255, 107, 107, 0.11);
+}
+
+.list-card--inactive,
+.player-row--inactive {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+.player-row__identity {
+  flex: 1;
+}
+
+.status-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .management-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-filter {
+    width: 100%;
+  }
+
+  .status-filter__button {
+    flex: 1;
+  }
+
+  .list-card,
+  .player-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .player-row__identity {
+    min-width: calc(100% - 60px);
+  }
+
+  .side-pill {
+    margin-left: 56px;
+  }
+
+  .row-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .row-actions .button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 460px) {
+  .row-actions {
+    flex-direction: column;
+  }
+
+  .row-actions .button {
+    width: 100%;
+  }
+
+  .side-pill,
+  .status-pill {
+    margin-left: 0;
+  }
+}
