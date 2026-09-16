@@ -1,16 +1,45 @@
-import { Player, PLAYER_SIDE } from "./domain/Player.js";
-import { DrawService } from "./services/DrawService.js";
-import { DrawView } from "./ui/DrawView.js";
+import {
+  Player,
+  PLAYER_SIDE,
+} from "./domain/Player.js";
 
-const drawForm = document.querySelector("#draw-form");
-const drawButton = document.querySelector("#draw-button");
-const clearButton = document.querySelector("#clear-button");
-const redrawButton = document.querySelector("#redraw-button");
-const resultsSection = document.querySelector("#results-section");
-const pairsList = document.querySelector("#pairs-list");
-const pairTemplate = document.querySelector("#pair-template");
-const errorElement = document.querySelector("#form-error");
-const playerInputs = [...document.querySelectorAll("[data-side]")];
+import {
+  DrawService,
+} from "./services/DrawService.js";
+
+import {
+  DrawView,
+} from "./ui/DrawView.js";
+
+
+const drawForm =
+  document.querySelector("#draw-form");
+
+const drawButton =
+  document.querySelector("#draw-button");
+
+const clearButton =
+  document.querySelector("#clear-button");
+
+const redrawButton =
+  document.querySelector("#redraw-button");
+
+const resultsSection =
+  document.querySelector("#results-section");
+
+const pairsList =
+  document.querySelector("#pairs-list");
+
+const pairTemplate =
+  document.querySelector("#pair-template");
+
+const errorElement =
+  document.querySelector("#form-error");
+
+const playerInputs = [
+  ...document.querySelectorAll("[data-side]"),
+];
+
 
 const view = new DrawView({
   resultsSection,
@@ -20,64 +49,136 @@ const view = new DrawView({
   playerInputs,
 });
 
+
 const getPlayersBySide = (side) =>
   playerInputs
-    .filter((input) => input.dataset.side === side)
-    .map((input) => new Player(input.value, side));
+    .filter(
+      (input) =>
+        input.dataset.side === side &&
+        input.value.trim(),
+    )
+    .map(
+      (input) =>
+        new Player(
+          input.value,
+          side,
+        ),
+    );
+
 
 const handleDraw = () => {
   view.clearError();
   view.clearInputValidation();
 
-  const hasEmptyInput = playerInputs.some((input) => !input.value.trim());
-
-  if (hasEmptyInput) {
-    view.markEmptyInputsAsInvalid();
-    view.showError("Preencha o nome dos 8 jogadores antes de realizar o sorteio.");
-    return;
-  }
-
   try {
-    const leftPlayers = getPlayersBySide(PLAYER_SIDE.LEFT);
-    const rightPlayers = getPlayersBySide(PLAYER_SIDE.RIGHT);
-    const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
+
+    const leftPlayers =
+      getPlayersBySide(
+        PLAYER_SIDE.LEFT,
+      );
+
+    const rightPlayers =
+      getPlayersBySide(
+        PLAYER_SIDE.RIGHT,
+      );
+
+    const pairs =
+      DrawService.createPairs(
+        leftPlayers,
+        rightPlayers,
+      );
 
     view.renderPairs(pairs);
+
   } catch (error) {
-    view.showError(error.message);
+
+    view.showError(
+      error.message,
+    );
+
   }
 };
 
-drawForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  handleDraw();
-});
 
-redrawButton.addEventListener("click", handleDraw);
+drawForm.addEventListener(
+  "submit",
+  (event) => {
 
-clearButton.addEventListener("click", () => {
-  drawForm.reset();
-  view.clearError();
-  view.clearResults();
-  view.clearInputValidation();
+    event.preventDefault();
 
-  playerInputs[0]?.focus();
-});
+    handleDraw();
 
-playerInputs.forEach((input) => {
-  input.addEventListener("input", () => {
-    input.classList.remove("input--invalid");
+  },
+);
 
-    if (errorElement.textContent) {
-      view.clearError();
-    }
-  });
-});
 
-drawButton.addEventListener("pointerdown", () => {
-  drawButton.classList.add("is-pressing");
-});
+redrawButton.addEventListener(
+  "click",
+  handleDraw,
+);
 
-drawButton.addEventListener("pointerup", () => {
-  drawButton.classList.remove("is-pressing");
-});
+
+clearButton.addEventListener(
+  "click",
+  () => {
+
+    drawForm.reset();
+
+    view.clearError();
+
+    view.clearResults();
+
+    view.clearInputValidation();
+
+    playerInputs[0]?.focus();
+
+  },
+);
+
+
+playerInputs.forEach(
+  (input) => {
+
+    input.addEventListener(
+      "input",
+      () => {
+
+        input.classList.remove(
+          "input--invalid",
+        );
+
+        if (
+          errorElement.textContent
+        ) {
+          view.clearError();
+        }
+
+      },
+    );
+
+  },
+);
+
+
+drawButton.addEventListener(
+  "pointerdown",
+  () => {
+
+    drawButton.classList.add(
+      "is-pressing",
+    );
+
+  },
+);
+
+
+drawButton.addEventListener(
+  "pointerup",
+  () => {
+
+    drawButton.classList.remove(
+      "is-pressing",
+    );
+
+  },
+);
