@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Sorteador de duplas de futevôlei, combinando jogadores de esquerda e direita."
+  />
+  <title>Futevôlei | Sorteio de Duplas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="./src/css/styles.css" />
+</head>
+
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">FUTEVÔLEI</span>
+        <h1>Sorteio de Duplas</h1>
+        <p>
+          Informe quatro jogadores de esquerda e quatro de direita.
+          O sorteio sempre formará uma dupla com um jogador de cada lado.
+        </p>
+      </div>
+
+      <div class="hero-badge" aria-hidden="true">
+        <span>8</span>
+        <small>jogadores</small>
+      </div>
+    </section>
+
+    <section class="draw-card" aria-labelledby="draw-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Jogadores</span>
+          <h2 id="draw-title">Monte os dois lados</h2>
+        </div>
+
+        <button id="clear-button" class="button button--ghost" type="button">
+          Limpar
+        </button>
+      </div>
+
+      <form id="draw-form" novalidate>
+        <div class="players-grid">
+          <fieldset class="side-card side-card--left">
+            <legend>
+              <span class="side-dot"></span>
+              Esquerdas
+            </legend>
+
+            <div class="inputs-list" id="left-players">
+              <label>
+                <span>Jogador 1</span>
+                <input
+                  type="text"
+                  name="left-player-1"
+                  data-side="left"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Lucas"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 2</span>
+                <input
+                  type="text"
+                  name="left-player-2"
+                  data-side="left"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Pedro"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 3</span>
+                <input
+                  type="text"
+                  name="left-player-3"
+                  data-side="left"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Rafael"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 4</span>
+                <input
+                  type="text"
+                  name="left-player-4"
+                  data-side="left"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Bruno"
+                />
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="versus" aria-hidden="true">
+            <span>+</span>
+          </div>
+
+          <fieldset class="side-card side-card--right">
+            <legend>
+              <span class="side-dot"></span>
+              Direitas
+            </legend>
+
+            <div class="inputs-list" id="right-players">
+              <label>
+                <span>Jogador 1</span>
+                <input
+                  type="text"
+                  name="right-player-1"
+                  data-side="right"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: André"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 2</span>
+                <input
+                  type="text"
+                  name="right-player-2"
+                  data-side="right"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Felipe"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 3</span>
+                <input
+                  type="text"
+                  name="right-player-3"
+                  data-side="right"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Diego"
+                />
+              </label>
+
+              <label>
+                <span>Jogador 4</span>
+                <input
+                  type="text"
+                  name="right-player-4"
+                  data-side="right"
+                  autocomplete="off"
+                  maxlength="40"
+                  placeholder="Ex.: Matheus"
+                />
+              </label>
+            </div>
+          </fieldset>
+        </div>
+
+        <p id="form-error" class="form-error" role="alert" aria-live="polite"></p>
+
+        <div class="actions">
+          <button id="draw-button" class="button button--primary" type="submit">
+            <span class="button-icon" aria-hidden="true">⚡</span>
+            Sortear duplas
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section id="results-section" class="results-section is-hidden" aria-live="polite">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">Resultado</span>
+          <h2>Duplas sorteadas</h2>
+        </div>
+
+        <button id="redraw-button" class="button button--secondary" type="button">
+          Sortear novamente
+        </button>
+      </div>
+
+      <div id="pairs-list" class="pairs-grid"></div>
+    </section>
+  </main>
+
+  <template id="pair-template">
+    <article class="pair-card">
+      <div class="pair-number"></div>
+
+      <div class="pair-player pair-player--left">
+        <span class="player-role">Esquerda</span>
+        <strong class="left-player-name"></strong>
+      </div>
+
+      <span class="pair-plus" aria-hidden="true">+</span>
+
+      <div class="pair-player pair-player--right">
+        <span class="player-role">Direita</span>
+        <strong class="right-player-name"></strong>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="./src/js/app.js"></script>
+</body>
+</html>

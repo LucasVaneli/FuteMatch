@@ -1,0 +1,10 @@
+{
+  "name": "futevolei-sorteio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python -m http.server 5500",
+    "test": "node --test"
+  }
+}
