@@ -3,217 +3,127 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta
-    name="description"
-    content="Sorteador de duplas de futevôlei, combinando jogadores de esquerda e direita."
-  />
-  <title>Futevôlei | Sorteio de Duplas</title>
+  <meta name="description" content="FuteMatch: patotas, jogadores e sorteio de duplas de futevôlei." />
+  <title>FuteMatch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./src/css/styles.css" />
 </head>
-
 <body>
   <main class="app-shell">
-    <section class="hero">
+    <header class="topbar">
       <div>
-        <span class="eyebrow">FUTEVÔLEI</span>
-        <h1>Sorteio de Duplas</h1>
-        <p>
-          Informe os jogadores da esquerda e da direita.
-          <br>
-          O sorteador sempre formará uma dupla com um jogador de cada lado.
-        </p>
+        <span class="eyebrow">FUTEMATCH</span>
+        <h1>Organize sua patota.</h1>
+        <p>Cadastre jogadores, monte sua patota e sorteie duplas apenas com quem joga naquele grupo.</p>
       </div>
-
-      <div class="hero-badge" aria-hidden="true">
-        <span>8</span>
-        <small>jogadores</small>
+      <div class="current-group">
+        <label for="current-group-select">Patota atual</label>
+        <select id="current-group-select" aria-label="Selecionar patota atual">
+          <option value="">Nenhuma patota</option>
+        </select>
       </div>
-    </section>
+    </header>
 
-    <section class="draw-card" aria-labelledby="draw-title">
+    <nav class="app-nav" aria-label="Navegação principal">
+      <button class="nav-button is-active" type="button" data-page="draw">🎲 Sorteio</button>
+      <button class="nav-button" type="button" data-page="groups">🏖️ Patotas</button>
+      <button class="nav-button" type="button" data-page="players">👥 Jogadores</button>
+    </nav>
+
+    <section class="page" data-page-section="draw">
       <div class="section-heading">
         <div>
-          <span class="section-kicker">Jogadores</span>
-          <h2 id="draw-title">Monte os dois lados</h2>
+          <span class="section-kicker">Sorteio</span>
+          <h2>Jogadores da patota</h2>
+          <p id="draw-context" class="section-description">Crie ou selecione uma patota para começar.</p>
         </div>
-
-        <button id="clear-button" class="button button--ghost" type="button">
-          Limpar
-        </button>
+        <button id="clear-selection-button" class="button button--ghost" type="button">Limpar seleção</button>
       </div>
 
-      <form id="draw-form" novalidate>
+      <div id="draw-empty-state" class="empty-state">
+        <strong>Nenhuma patota selecionada</strong>
+        <span>Cadastre uma patota e associe jogadores a ela.</span>
+        <button class="button button--secondary" type="button" data-go-to="groups">Cadastrar patota</button>
+      </div>
+
+      <form id="draw-form" class="is-hidden" novalidate>
         <div class="players-grid">
           <fieldset class="side-card side-card--left">
-            <legend>
-              <span class="side-dot"></span>
-              Esquerdas
-            </legend>
-
-            <div class="inputs-list" id="left-players">
-              <label>
-                <span>Jogador 1</span>
-                <input
-                  type="text"
-                  name="left-player-1"
-                  data-side="left"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Lucas"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 2</span>
-                <input
-                  type="text"
-                  name="left-player-2"
-                  data-side="left"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Pedro"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 3</span>
-                <input
-                  type="text"
-                  name="left-player-3"
-                  data-side="left"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Rafael"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 4</span>
-                <input
-                  type="text"
-                  name="left-player-4"
-                  data-side="left"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Bruno"
-                />
-              </label>
-            </div>
+            <legend><span class="side-dot"></span> Esquerdas</legend>
+            <div id="left-player-options" class="player-options"></div>
           </fieldset>
-
-          <div class="versus" aria-hidden="true">
-            <span>+</span>
-          </div>
-
+          <div class="versus" aria-hidden="true"><span>+</span></div>
           <fieldset class="side-card side-card--right">
-            <legend>
-              <span class="side-dot"></span>
-              Direitas
-            </legend>
-
-            <div class="inputs-list" id="right-players">
-              <label>
-                <span>Jogador 1</span>
-                <input
-                  type="text"
-                  name="right-player-1"
-                  data-side="right"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: André"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 2</span>
-                <input
-                  type="text"
-                  name="right-player-2"
-                  data-side="right"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Felipe"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 3</span>
-                <input
-                  type="text"
-                  name="right-player-3"
-                  data-side="right"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Diego"
-                />
-              </label>
-
-              <label>
-                <span>Jogador 4</span>
-                <input
-                  type="text"
-                  name="right-player-4"
-                  data-side="right"
-                  autocomplete="off"
-                  maxlength="40"
-                  placeholder="Ex.: Matheus"
-                />
-              </label>
-            </div>
+            <legend><span class="side-dot"></span> Direitas</legend>
+            <div id="right-player-options" class="player-options"></div>
           </fieldset>
         </div>
-
         <p id="form-error" class="form-error" role="alert" aria-live="polite"></p>
-
         <div class="actions">
-          <button id="draw-button" class="button button--primary" type="submit">
-            <span class="button-icon" aria-hidden="true">⚡</span>
-            Sortear duplas
-          </button>
+          <button id="draw-button" class="button button--primary" type="submit">⚡ Sortear duplas</button>
         </div>
       </form>
+
+      <section id="results-section" class="results-section is-hidden" aria-live="polite">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">Resultado</span>
+            <h2>Duplas sorteadas</h2>
+          </div>
+          <button id="redraw-button" class="button button--secondary" type="button">Sortear novamente</button>
+        </div>
+        <div id="pairs-list" class="pairs-grid"></div>
+      </section>
     </section>
 
-    <section id="results-section" class="results-section is-hidden" aria-live="polite">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">Resultado</span>
-          <h2>Duplas sorteadas</h2>
-        </div>
-
-        <button id="redraw-button" class="button button--secondary" type="button">
-          Sortear novamente
-        </button>
+    <section class="page is-hidden" data-page-section="groups">
+      <div class="content-grid">
+        <article class="panel">
+          <div class="section-heading"><div><span class="section-kicker">Nova patota</span><h2>Cadastrar patota</h2></div></div>
+          <form id="group-form" class="form-stack">
+            <label><span>Nome da patota</span><input id="group-name" type="text" maxlength="50" placeholder="Ex.: Fute de Terça" required /></label>
+            <button class="button button--primary" type="submit">Criar patota</button>
+            <p id="group-error" class="form-error form-error--left" role="alert"></p>
+          </form>
+        </article>
+        <article class="panel">
+          <div class="section-heading"><div><span class="section-kicker">Suas patotas</span><h2>Grupos cadastrados</h2></div></div>
+          <div id="groups-list" class="card-list"></div>
+        </article>
       </div>
+    </section>
 
-      <div id="pairs-list" class="pairs-grid"></div>
+    <section class="page is-hidden" data-page-section="players">
+      <div class="content-grid">
+        <article class="panel">
+          <div class="section-heading"><div><span class="section-kicker">Novo jogador</span><h2>Cadastrar jogador</h2></div></div>
+          <form id="player-form" class="form-stack">
+            <label><span>Nome</span><input id="player-name" type="text" maxlength="50" placeholder="Ex.: Lucas" required /></label>
+            <label><span>Data de nascimento</span><input id="player-birth-date" type="date" required /></label>
+            <label><span>Lado</span><select id="player-side" required><option value="">Selecione</option><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
+            <fieldset class="membership-fieldset"><legend>Patotas</legend><div id="player-group-options" class="membership-options"></div></fieldset>
+            <button class="button button--primary" type="submit">Cadastrar jogador</button>
+            <p id="player-error" class="form-error form-error--left" role="alert"></p>
+          </form>
+        </article>
+        <article class="panel">
+          <div class="section-heading"><div><span class="section-kicker">Jogadores</span><h2>Cadastros</h2><p class="section-description">Um jogador pode participar de várias patotas.</p></div></div>
+          <div id="players-list" class="card-list"></div>
+        </article>
+      </div>
     </section>
   </main>
 
   <template id="pair-template">
     <article class="pair-card">
       <div class="pair-number"></div>
-
-      <div class="pair-player pair-player--left">
-        <span class="player-role">Esquerda</span>
-        <strong class="left-player-name"></strong>
-      </div>
-
+      <div class="pair-player pair-player--left"><span class="player-role">Esquerda</span><strong class="left-player-name"></strong></div>
       <span class="pair-plus" aria-hidden="true">+</span>
-
-      <div class="pair-player pair-player--right">
-        <span class="player-role">Direita</span>
-        <strong class="right-player-name"></strong>
-      </div>
+      <div class="pair-player pair-player--right"><span class="player-role">Direita</span><strong class="right-player-name"></strong></div>
     </article>
   </template>
-
   <script type="module" src="./src/js/app.js"></script>
 </body>
 </html>
