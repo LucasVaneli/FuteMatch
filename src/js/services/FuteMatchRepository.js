@@ -57,6 +57,10 @@ export class FuteMatchRepository {
   createGroup(name) {
     const state = this.getState();
 
+    if (!name?.trim()) {
+      throw new Error("Informe o nome da patota.");
+    }
+
     if (state.groups.some((group) => normalize(group.name) === normalize(name))) {
       throw new Error("Já existe uma patota com esse nome.");
     }
@@ -76,7 +80,9 @@ export class FuteMatchRepository {
     const state = this.getState();
 
     if (state.players.some((player) => normalize(player.name) === normalize(name))) {
-      throw new Error("Já existe um jogador com esse nome.");
+      throw new Error(
+        "Esse jogador já está cadastrado. Use a opção de adicionar jogador existente.",
+      );
     }
 
     if (!birthDate) {
@@ -119,6 +125,23 @@ export class FuteMatchRepository {
       .map(Player.fromJSON);
   }
 
+  getPlayersNotInGroup(groupId) {
+    if (!groupId) {
+      return this.getPlayers();
+    }
+
+    const state = this.getState();
+    const playerIds = new Set(
+      state.memberships
+        .filter((membership) => membership.groupId === groupId && membership.active)
+        .map((membership) => membership.playerId),
+    );
+
+    return state.players
+      .filter((player) => player.active !== false && !playerIds.has(player.id))
+      .map(Player.fromJSON);
+  }
+
   getGroupsByPlayer(playerId) {
     const state = this.getState();
     const groupIds = new Set(
@@ -128,6 +151,38 @@ export class FuteMatchRepository {
     );
 
     return state.groups.filter((group) => groupIds.has(group.id)).map(Group.fromJSON);
+  }
+
+  addPlayerToGroup(playerId, groupId) {
+    const state = this.getState();
+    const playerExists = state.players.some((player) => player.id === playerId);
+    const groupExists = state.groups.some((group) => group.id === groupId);
+
+    if (!playerExists || !groupExists) {
+      throw new Error("Jogador ou patota não encontrados.");
+    }
+
+    const existingMembership = state.memberships.find(
+      (membership) => membership.playerId === playerId && membership.groupId === groupId,
+    );
+
+    if (existingMembership?.active) {
+      return;
+    }
+
+    if (existingMembership) {
+      existingMembership.active = true;
+      existingMembership.joinedAt = new Date().toISOString();
+    } else {
+      state.memberships.push({
+        groupId,
+        playerId,
+        active: true,
+        joinedAt: new Date().toISOString(),
+      });
+    }
+
+    this.#save(state);
   }
 
   updatePlayerGroups(playerId, groupIds) {
