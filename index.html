@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="FuteMatch: patotas, jogadores e sorteio de duplas de futevôlei." />
+  <meta name="description" content="FuteMatch: organize patotas, jogadores e sorteios de futevôlei." />
   <title>FuteMatch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,106 +15,194 @@
     <header class="topbar">
       <div>
         <span class="eyebrow">FUTEMATCH</span>
-        <h1>Organize sua patota.</h1>
-        <p>Cadastre jogadores, monte sua patota e sorteie duplas apenas com quem joga naquele grupo.</p>
+        <h1>Sua patota, organizada.</h1>
+        <p>Crie a patota, adicione os jogadores e faça o sorteio. Um passo de cada vez.</p>
       </div>
-      <div class="current-group">
-        <label for="current-group-select">Patota atual</label>
-        <select id="current-group-select" aria-label="Selecionar patota atual">
-          <option value="">Nenhuma patota</option>
-        </select>
+
+      <div id="group-switcher" class="group-switcher is-hidden">
+        <span>Patota selecionada</span>
+        <select id="current-group-select" aria-label="Trocar patota"></select>
       </div>
     </header>
 
-    <nav class="app-nav" aria-label="Navegação principal">
-      <button class="nav-button is-active" type="button" data-page="draw">🎲 Sorteio</button>
-      <button class="nav-button" type="button" data-page="groups">🏖️ Patotas</button>
-      <button class="nav-button" type="button" data-page="players">👥 Jogadores</button>
+    <nav class="flow-nav" aria-label="Etapas do FuteMatch">
+      <button class="flow-step" type="button" data-page="groups">
+        <span class="flow-step__number">1</span>
+        <span><strong>Patota</strong><small>Crie ou escolha seu grupo</small></span>
+      </button>
+      <button class="flow-step" type="button" data-page="players">
+        <span class="flow-step__number">2</span>
+        <span><strong>Jogadores</strong><small>Monte a lista da patota</small></span>
+      </button>
+      <button class="flow-step" type="button" data-page="draw">
+        <span class="flow-step__number">3</span>
+        <span><strong>Sorteio</strong><small>Escolha quem joga hoje</small></span>
+      </button>
     </nav>
 
-    <section class="page" data-page-section="draw">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">Sorteio</span>
-          <h2>Jogadores da patota</h2>
-          <p id="draw-context" class="section-description">Crie ou selecione uma patota para começar.</p>
-        </div>
-        <button id="clear-selection-button" class="button button--ghost" type="button">Limpar seleção</button>
-      </div>
-
-      <div id="draw-empty-state" class="empty-state">
-        <strong>Nenhuma patota selecionada</strong>
-        <span>Cadastre uma patota e associe jogadores a ela.</span>
-        <button class="button button--secondary" type="button" data-go-to="groups">Cadastrar patota</button>
-      </div>
-
-      <form id="draw-form" class="is-hidden" novalidate>
-        <div class="players-grid">
-          <fieldset class="side-card side-card--left">
-            <legend><span class="side-dot"></span> Esquerdas</legend>
-            <div id="left-player-options" class="player-options"></div>
-          </fieldset>
-          <div class="versus" aria-hidden="true"><span>+</span></div>
-          <fieldset class="side-card side-card--right">
-            <legend><span class="side-dot"></span> Direitas</legend>
-            <div id="right-player-options" class="player-options"></div>
-          </fieldset>
-        </div>
-        <p id="form-error" class="form-error" role="alert" aria-live="polite"></p>
-        <div class="actions">
-          <button id="draw-button" class="button button--primary" type="submit">⚡ Sortear duplas</button>
-        </div>
-      </form>
-
-      <section id="results-section" class="results-section is-hidden" aria-live="polite">
-        <div class="section-heading">
-          <div>
-            <span class="section-kicker">Resultado</span>
-            <h2>Duplas sorteadas</h2>
-          </div>
-          <button id="redraw-button" class="button button--secondary" type="button">Sortear novamente</button>
-        </div>
-        <div id="pairs-list" class="pairs-grid"></div>
-      </section>
-    </section>
-
     <section class="page is-hidden" data-page-section="groups">
-      <div class="content-grid">
-        <article class="panel">
-          <div class="section-heading"><div><span class="section-kicker">Nova patota</span><h2>Cadastrar patota</h2></div></div>
+      <div class="page-heading">
+        <div>
+          <span class="section-kicker">PASSO 1</span>
+          <h2>Qual é a sua patota?</h2>
+          <p>Crie uma nova ou escolha uma já cadastrada. Ela será usada nos próximos passos.</p>
+        </div>
+      </div>
+
+      <div class="setup-grid">
+        <article class="panel panel--highlight">
+          <span class="panel-icon">🏖️</span>
+          <h3>Criar uma patota</h3>
+          <p>Você só precisa informar um nome. Depois vamos cadastrar os jogadores.</p>
           <form id="group-form" class="form-stack">
-            <label><span>Nome da patota</span><input id="group-name" type="text" maxlength="50" placeholder="Ex.: Fute de Terça" required /></label>
-            <button class="button button--primary" type="submit">Criar patota</button>
-            <p id="group-error" class="form-error form-error--left" role="alert"></p>
+            <label>
+              <span>Nome da patota</span>
+              <input id="group-name" type="text" maxlength="50" placeholder="Ex.: Fute de Terça" required />
+            </label>
+            <button class="button button--primary" type="submit">Criar e continuar</button>
+            <p id="group-error" class="form-error" role="alert"></p>
           </form>
         </article>
+
         <article class="panel">
-          <div class="section-heading"><div><span class="section-kicker">Suas patotas</span><h2>Grupos cadastrados</h2></div></div>
+          <div class="panel-heading">
+            <div>
+              <span class="section-kicker">JÁ CADASTRADAS</span>
+              <h3>Escolher uma patota</h3>
+            </div>
+          </div>
           <div id="groups-list" class="card-list"></div>
         </article>
       </div>
     </section>
 
     <section class="page is-hidden" data-page-section="players">
-      <div class="content-grid">
-        <article class="panel">
-          <div class="section-heading"><div><span class="section-kicker">Novo jogador</span><h2>Cadastrar jogador</h2></div></div>
-          <form id="player-form" class="form-stack">
-            <label><span>Nome</span><input id="player-name" type="text" maxlength="50" placeholder="Ex.: Lucas" required /></label>
-            <label><span>Data de nascimento</span><input id="player-birth-date" type="date" required /></label>
-            <label><span>Lado</span><select id="player-side" required><option value="">Selecione</option><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
-            <fieldset class="membership-fieldset"><legend>Patotas</legend><div id="player-group-options" class="membership-options"></div></fieldset>
-            <button class="button button--primary" type="submit">Cadastrar jogador</button>
-            <p id="player-error" class="form-error form-error--left" role="alert"></p>
-          </form>
-        </article>
-        <article class="panel">
-          <div class="section-heading"><div><span class="section-kicker">Jogadores</span><h2>Cadastros</h2><p class="section-description">Um jogador pode participar de várias patotas.</p></div></div>
-          <div id="players-list" class="card-list"></div>
-        </article>
+      <div id="players-no-group" class="empty-state is-hidden">
+        <span class="empty-state__icon">🏖️</span>
+        <strong>Primeiro escolha uma patota</strong>
+        <span>Assim saberemos onde os jogadores devem ser adicionados.</span>
+        <button class="button button--primary" type="button" data-go-to="groups">Escolher patota</button>
+      </div>
+
+      <div id="players-content" class="is-hidden">
+        <div class="page-heading page-heading--with-action">
+          <div>
+            <span class="section-kicker">PASSO 2</span>
+            <h2>Jogadores de <span id="players-group-name"></span></h2>
+            <p>Todo novo jogador cadastrado aqui entra automaticamente nesta patota.</p>
+          </div>
+          <button class="button button--secondary" type="button" data-go-to="draw">Ir para o sorteio</button>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card"><span>Total</span><strong id="players-total-count">0</strong></div>
+          <div class="stat-card stat-card--left"><span>Esquerdas</span><strong id="players-left-count">0</strong></div>
+          <div class="stat-card stat-card--right"><span>Direitas</span><strong id="players-right-count">0</strong></div>
+        </div>
+
+        <div class="setup-grid setup-grid--players">
+          <article class="panel panel--highlight">
+            <span class="panel-icon">👤</span>
+            <h3>Novo jogador</h3>
+            <p id="player-target-group" class="helper-text"></p>
+            <form id="player-form" class="form-stack">
+              <label><span>Nome</span><input id="player-name" type="text" maxlength="50" placeholder="Ex.: Lucas" required /></label>
+              <label><span>Data de nascimento</span><input id="player-birth-date" type="date" required /></label>
+              <label>
+                <span>Lado que joga</span>
+                <select id="player-side" required>
+                  <option value="">Selecione</option>
+                  <option value="left">Esquerda</option>
+                  <option value="right">Direita</option>
+                </select>
+              </label>
+              <button class="button button--primary" type="submit">Adicionar jogador</button>
+              <p id="player-error" class="form-error" role="alert"></p>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <span class="section-kicker">NA PATOTA</span>
+                <h3>Jogadores cadastrados</h3>
+              </div>
+            </div>
+
+            <div id="existing-player-box" class="existing-player-box is-hidden">
+              <div>
+                <strong>Jogador já existe no FuteMatch?</strong>
+                <small>Adicione-o a esta patota sem cadastrar novamente.</small>
+              </div>
+              <div class="inline-form">
+                <select id="existing-player-select"></select>
+                <button id="add-existing-player-button" class="button button--secondary" type="button">Adicionar</button>
+              </div>
+              <p id="existing-player-error" class="form-error" role="alert"></p>
+            </div>
+
+            <div id="players-list" class="card-list"></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="page is-hidden" data-page-section="draw">
+      <div id="draw-empty-state" class="empty-state is-hidden">
+        <span class="empty-state__icon">🎲</span>
+        <strong id="draw-empty-title">Ainda não dá para sortear</strong>
+        <span id="draw-empty-description"></span>
+        <button id="draw-empty-action" class="button button--primary" type="button">Resolver agora</button>
+      </div>
+
+      <div id="draw-content" class="is-hidden">
+        <div class="page-heading page-heading--with-action">
+          <div>
+            <span class="section-kicker">PASSO 3</span>
+            <h2>Quem joga hoje?</h2>
+            <p id="draw-context"></p>
+          </div>
+          <div class="button-group">
+            <button id="select-all-button" class="button button--ghost" type="button">Selecionar todos</button>
+            <button id="clear-selection-button" class="button button--ghost" type="button">Limpar</button>
+          </div>
+        </div>
+
+        <form id="draw-form" novalidate>
+          <div class="players-grid">
+            <fieldset class="side-card side-card--left">
+              <legend><span class="side-dot"></span> Esquerdas</legend>
+              <div id="left-player-options" class="player-options"></div>
+            </fieldset>
+            <div class="versus" aria-hidden="true"><span>+</span></div>
+            <fieldset class="side-card side-card--right">
+              <legend><span class="side-dot"></span> Direitas</legend>
+              <div id="right-player-options" class="player-options"></div>
+            </fieldset>
+          </div>
+
+          <div class="selection-summary">
+            <div>
+              <strong id="selection-summary-title">0 jogadores selecionados</strong>
+              <span id="selection-summary-description">Selecione a mesma quantidade de cada lado.</span>
+            </div>
+            <button id="draw-button" class="button button--primary" type="submit">⚡ Sortear duplas</button>
+          </div>
+          <p id="form-error" class="form-error form-error--center" role="alert" aria-live="polite"></p>
+        </form>
+
+        <section id="results-section" class="results-section is-hidden" aria-live="polite">
+          <div class="page-heading page-heading--with-action">
+            <div><span class="section-kicker">RESULTADO</span><h2>Duplas sorteadas</h2></div>
+            <button id="redraw-button" class="button button--secondary" type="button">Sortear novamente</button>
+          </div>
+          <div id="pairs-list" class="pairs-grid"></div>
+        </section>
       </div>
     </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <template id="pair-template">
     <article class="pair-card">
@@ -124,6 +212,7 @@
       <div class="pair-player pair-player--right"><span class="player-role">Direita</span><strong class="right-player-name"></strong></div>
     </article>
   </template>
+
   <script type="module" src="./src/js/app.js"></script>
 </body>
 </html>
