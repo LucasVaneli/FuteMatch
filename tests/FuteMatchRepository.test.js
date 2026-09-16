@@ -57,3 +57,44 @@ test("consulta da patota retorna somente seus jogadores", () => {
   assert.deepEqual(repository.getPlayersByGroup(groupA.id).map((player) => player.name), ["Lucas"]);
   assert.deepEqual(repository.getPlayersByGroup(groupB.id).map((player) => player.name), ["Pedro"]);
 });
+
+test("jogador existente pode ser adicionado a outra patota sem novo cadastro", () => {
+  const repository = new FuteMatchRepository(new MemoryStorage());
+  const groupA = repository.createGroup("Terça");
+  const groupB = repository.createGroup("Sexta");
+
+  const player = repository.createPlayer({
+    name: "Lucas",
+    birthDate: "1999-03-31",
+    side: PLAYER_SIDE.LEFT,
+    groupIds: [groupA.id],
+  });
+
+  repository.addPlayerToGroup(player.id, groupB.id);
+
+  assert.equal(repository.getPlayers().length, 1);
+  assert.equal(repository.getPlayersByGroup(groupB.id)[0].id, player.id);
+  assert.equal(repository.getGroupsByPlayer(player.id).length, 2);
+});
+
+test("lista jogadores ainda disponíveis para uma patota", () => {
+  const repository = new FuteMatchRepository(new MemoryStorage());
+  const groupA = repository.createGroup("Terça");
+  const groupB = repository.createGroup("Sexta");
+
+  repository.createPlayer({
+    name: "Lucas",
+    birthDate: "1999-03-31",
+    side: PLAYER_SIDE.LEFT,
+    groupIds: [groupA.id],
+  });
+
+  repository.createPlayer({
+    name: "Pedro",
+    birthDate: "2000-01-01",
+    side: PLAYER_SIDE.RIGHT,
+    groupIds: [groupB.id],
+  });
+
+  assert.deepEqual(repository.getPlayersNotInGroup(groupA.id).map((player) => player.name), ["Pedro"]);
+});
