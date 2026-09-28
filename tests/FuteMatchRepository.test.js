@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { GROUP_WEEKDAY } from "../src/js/domain/Group.js";
 import { FuteMatchRepository } from "../src/js/services/FuteMatchRepository.js";
 import { RankingService } from "../src/js/services/RankingService.js";
 import { PLAYER_SIDE } from "../src/js/domain/Player.js";
@@ -19,9 +20,24 @@ const dateFromToday = (offsetDays = 0) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
+const addDaysToIso = (value, offsetDays) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + offsetDays));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+};
+
+const nextDateForWeekday = (weekday) => {
+  const current = dateFromToday();
+  const [year, month, day] = current.split("-").map(Number);
+  const currentWeekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const diff = (weekday - currentWeekday + 7) % 7;
+  return addDaysToIso(current, diff);
+};
+
 const createGroup = (repository, overrides = {}) =>
   repository.createGroup({
     name: overrides.name ?? "Terça",
+    weekday: overrides.weekday ?? GROUP_WEEKDAY.MONDAY,
     startTime: overrides.startTime ?? "19:00",
     endTime: overrides.endTime ?? "21:00",
     ownerUserId: overrides.ownerUserId ?? "user-1",
@@ -39,9 +55,71 @@ const createPlayer = (repository, groupId, name, side) =>
 test("patota exige horário de início e fim", () => {
   const repository = createRepository();
   assert.throws(
-    () => repository.createGroup({ name: "Terça", startTime: "", endTime: "21:00" }),
+    () => repository.createGroup({ name: "Terça", weekday: GROUP_WEEKDAY.TUESDAY, startTime: "", endTime: "21:00" }),
     /horários/i,
   );
+});
+
+test("patota exige dia da semana entre segunda e sexta", () => {
+  const repository = createRepository();
+
+  assert.throws(
+    () =>
+      repository.createGroup({
+        name: "Sem dia",
+        weekday: "",
+        startTime: "19:00",
+        endTime: "21:00",
+      }),
+    /dia da semana/i,
+  );
+
+  assert.throws(
+    () =>
+      repository.createGroup({
+        name: "Domingo",
+        weekday: 0,
+        startTime: "19:00",
+        endTime: "21:00",
+      }),
+    /dia da semana/i,
+  );
+});
+
+test("somente o organizador pode alterar dia e horário da patota", () => {
+  const repository = createRepository();
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+    weekday: GROUP_WEEKDAY.MONDAY,
+  });
+
+  assert.throws(
+    () =>
+      repository.updateGroupSchedule(
+        group.id,
+        {
+          weekday: GROUP_WEEKDAY.FRIDAY,
+          startTime: "20:00",
+          endTime: "22:00",
+        },
+        "other-user",
+      ),
+    /somente o organizador/i,
+  );
+
+  const updated = repository.updateGroupSchedule(
+    group.id,
+    {
+      weekday: GROUP_WEEKDAY.FRIDAY,
+      startTime: "20:00",
+      endTime: "22:00",
+    },
+    "owner-user",
+  );
+
+  assert.equal(updated.weekday, GROUP_WEEKDAY.FRIDAY);
+  assert.equal(updated.startTime, "20:00");
+  assert.equal(updated.endTime, "22:00");
 });
 
 test("criador entra automaticamente na patota", () => {
@@ -55,26 +133,57 @@ test("criador entra automaticamente na patota", () => {
   assert.equal(repository.getPlayersByGroup(group.id)[0].id, owner.id);
 });
 
-test("presença é registrada por data e começa vazia em outro dia", () => {
+test("presença abre dois dias antes e a próxima semana começa sem resposta", () => {
   const repository = createRepository();
-  const group = createGroup(repository);
+  const group = createGroup(repository, {
+    weekday: GROUP_WEEKDAY.MONDAY,
+  });
   const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
-  const firstDate = dateFromToday();
-  const nextDate = dateFromToday(1);
+  const eventDate = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+  const twoDaysBefore = addDaysToIso(eventDate, -2);
+  const threeDaysBefore = addDaysToIso(eventDate, -3);
+  const nextWeek = addDaysToIso(eventDate, 7);
+
+  const closedWindow = repository.getAttendanceWindow(
+    group.id,
+    threeDaysBefore,
+  );
+  assert.equal(closedWindow.isOpen, false);
+  assert.equal(closedWindow.targetDate, eventDate);
+
+  assert.throws(
+    () =>
+      repository.setAttendance({
+        groupId: group.id,
+        playerId: player.id,
+        date: eventDate,
+        status: "present",
+        currentDate: threeDaysBefore,
+      }),
+    /2 dias antes/i,
+  );
+
+  const openWindow = repository.getAttendanceWindow(
+    group.id,
+    twoDaysBefore,
+  );
+  assert.equal(openWindow.isOpen, true);
+  assert.equal(openWindow.targetDate, eventDate);
 
   repository.setAttendance({
     groupId: group.id,
     playerId: player.id,
-    date: firstDate,
+    date: eventDate,
     status: "present",
+    currentDate: twoDaysBefore,
   });
 
   assert.equal(
-    repository.getPlayerAttendance(group.id, player.id, firstDate).status,
+    repository.getPlayerAttendance(group.id, player.id, eventDate).status,
     "present",
   );
   assert.equal(
-    repository.getPlayerAttendance(group.id, player.id, nextDate),
+    repository.getPlayerAttendance(group.id, player.id, nextWeek),
     null,
   );
 });
@@ -127,19 +236,22 @@ test("ranking soma 2 por presença, 1 por vitória e 4 por churrasco", () => {
   const group = createGroup(repository);
   const left = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
   const right = createPlayer(repository, group.id, "Pedro", PLAYER_SIDE.RIGHT);
-  const date = dateFromToday();
+  const date = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+  const votingDate = addDaysToIso(date, -2);
 
   repository.setAttendance({
     groupId: group.id,
     playerId: left.id,
     date,
     status: "present",
+    currentDate: votingDate,
   });
   repository.setAttendance({
     groupId: group.id,
     playerId: right.id,
     date,
     status: "present",
+    currentDate: votingDate,
   });
 
   const barbecue = repository.scheduleBarbecue(group.id, date, "user-1");
