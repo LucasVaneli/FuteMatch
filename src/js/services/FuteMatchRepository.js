@@ -561,6 +561,26 @@ export class FuteMatchRepository {
       .map((event) => ({ ...event }));
   }
 
+  getBarbecueEventsOrganizedByUser(
+    userId,
+    { includePast = false } = {},
+  ) {
+    const groupIds = new Set(
+      this.getGroupsOrganizedByUser(userId).map((group) => group.id),
+    );
+    const currentDate = dateKey();
+
+    return this.getState().barbecueEvents
+      .filter(
+        (event) =>
+          groupIds.has(event.groupId) &&
+          event.active !== false &&
+          (includePast || event.date >= currentDate),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((event) => ({ ...event }));
+  }
+
   getBarbecueEventById(eventId) {
     const event = this.getState().barbecueEvents.find(
       (item) => item.id === eventId,
