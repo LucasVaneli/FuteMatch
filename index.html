@@ -3,223 +3,171 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="FuteMatch: organize patotas, jogadores e sorteios de futevôlei." />
+  <meta name="description" content="FuteMatch: patotas, presença, sorteio e ranking de futevôlei." />
   <title>FuteMatch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./src/css/styles.css" />
-  <link rel="stylesheet" href="./src/css/management.css" />
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <span class="eyebrow">FUTEMATCH</span>
-        <h1>Sua patota, organizada.</h1>
-        <p>Crie a patota, adicione os jogadores e faça o sorteio. Um passo de cada vez.</p>
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-brand">
+      <span class="eyebrow">FUTEMATCH</span>
+      <h1>Seu fute.<br />Sua patota.<br />Seu ranking.</h1>
+      <p>Entre para acompanhar suas patotas, confirmar presença e disputar o ranking da galera.</p>
+      <div class="auth-points">
+        <span>✓ Presença vale 1 ponto</span>
+        <span>✓ Cada vitória vale 1 ponto</span>
+        <span>✓ Churrasco vale 5 pontos 😄</span>
+      </div>
+    </div>
+
+    <article class="auth-card">
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab is-active" type="button" data-auth-tab="login">Entrar</button>
+        <button class="auth-tab" type="button" data-auth-tab="register">Criar conta</button>
       </div>
 
-      <div id="group-switcher" class="group-switcher is-hidden">
-        <span>Patota selecionada</span>
-        <select id="current-group-select" aria-label="Trocar patota"></select>
-      </div>
-    </header>
-
-    <nav class="flow-nav" aria-label="Etapas do FuteMatch">
-      <button class="flow-step" type="button" data-page="groups">
-        <span class="flow-step__number">1</span>
-        <span><strong>Patota</strong><small>Crie ou escolha seu grupo</small></span>
-      </button>
-      <button class="flow-step" type="button" data-page="players">
-        <span class="flow-step__number">2</span>
-        <span><strong>Jogadores</strong><small>Monte a lista da patota</small></span>
-      </button>
-      <button class="flow-step" type="button" data-page="draw">
-        <span class="flow-step__number">3</span>
-        <span><strong>Sorteio</strong><small>Escolha quem joga hoje</small></span>
-      </button>
-    </nav>
-
-    <section class="page is-hidden" data-page-section="groups">
-      <div class="page-heading">
-        <div>
-          <span class="section-kicker">PASSO 1</span>
-          <h2>Qual é a sua patota?</h2>
-          <p>Crie uma nova ou escolha uma já cadastrada. Patotas inativas continuam preservadas e podem ser reativadas.</p>
+      <form id="login-form" class="auth-form" novalidate>
+        <div class="form-heading">
+          <h2>Bem-vindo de volta</h2>
+          <p>Acesse sua conta para ver suas patotas.</p>
         </div>
-      </div>
+        <label><span>E-mail</span><input id="login-email" type="email" autocomplete="email" placeholder="voce@email.com" required /></label>
+        <label><span>Senha</span><input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" required /></label>
+        <p id="login-error" class="form-error" role="alert"></p>
+        <button class="button button--primary button--full" type="submit">Entrar no FuteMatch</button>
+      </form>
 
-      <div class="setup-grid">
-        <article class="panel panel--highlight">
-          <span class="panel-icon">🏖️</span>
-          <h3>Criar uma patota</h3>
-          <p>Você só precisa informar um nome. Depois vamos cadastrar os jogadores.</p>
-          <form id="group-form" class="form-stack">
-            <label>
-              <span>Nome da patota</span>
-              <input id="group-name" type="text" maxlength="50" placeholder="Ex.: Fute de Terça" required />
-            </label>
-            <button class="button button--primary" type="submit">Criar e continuar</button>
+      <form id="register-form" class="auth-form is-hidden" novalidate>
+        <div class="form-heading">
+          <h2>Crie seu perfil de atleta</h2>
+          <p>Seu perfil será usado nas patotas e no ranking.</p>
+        </div>
+        <label><span>Nome</span><input id="register-name" type="text" maxlength="50" placeholder="Ex.: Lucas" required /></label>
+        <label><span>E-mail</span><input id="register-email" type="email" autocomplete="email" placeholder="voce@email.com" required /></label>
+        <div class="form-grid">
+          <label><span>Nascimento</span><input id="register-birth-date" type="date" required /></label>
+          <label><span>Lado que joga</span><select id="register-side" required><option value="">Selecione</option><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
+        </div>
+        <label><span>Senha</span><input id="register-password" type="password" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
+        <p class="form-hint">Nesta versão de demonstração, a conta fica salva apenas neste navegador. O login real será conectado ao Supabase depois.</p>
+        <p id="register-error" class="form-error" role="alert"></p>
+        <button class="button button--primary button--full" type="submit">Criar minha conta</button>
+      </form>
+    </article>
+  </section>
+
+  <div id="app" class="app-layout is-hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-ball">⚽</span><strong>FuteMatch</strong></div>
+      <nav class="main-nav" aria-label="Menu principal">
+        <button class="nav-item is-active" type="button" data-page="groups"><span>🏖️</span> Minhas patotas</button>
+        <button class="nav-item" type="button" data-page="create-group"><span>➕</span> Criar patota</button>
+        <button class="nav-item" type="button" data-page="attendance"><span>✅</span> Presença</button>
+        <button class="nav-item" type="button" data-page="draw"><span>🎲</span> Sorteio</button>
+        <button class="nav-item" type="button" data-page="results"><span>🏁</span> Resultados</button>
+        <button class="nav-item" type="button" data-page="ranking"><span>🏆</span> Ranking</button>
+      </nav>
+      <div class="sidebar-profile">
+        <div class="avatar" id="profile-avatar">L</div>
+        <div><strong id="profile-name">Atleta</strong><small id="profile-side">Esquerda</small></div>
+        <button id="logout-button" class="icon-button" type="button" title="Sair">↪</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="mobile-header">
+        <div class="brand"><span class="brand-ball">⚽</span><strong>FuteMatch</strong></div>
+        <button id="mobile-menu-button" class="icon-button" type="button" aria-label="Abrir menu">☰</button>
+      </header>
+
+      <section class="page" data-page-section="groups">
+        <div class="page-heading">
+          <div><span class="section-kicker">MINHAS PATOTAS</span><h1 id="welcome-title">Fala, atleta!</h1><p>Veja os grupos que você participa e o que está acontecendo em cada um.</p></div>
+          <button class="button button--primary" type="button" data-go-to="create-group">+ Nova patota</button>
+        </div>
+        <div id="my-groups-list" class="group-grid"></div>
+      </section>
+
+      <section class="page is-hidden" data-page-section="create-group">
+        <div class="page-heading"><div><span class="section-kicker">NOVA PATOTA</span><h1>Criar patota</h1><p>Informe o nome e o horário fixo do encontro.</p></div></div>
+        <div class="narrow-panel">
+          <form id="group-form" class="form-stack" novalidate>
+            <label><span>Nome da patota</span><input id="group-name" type="text" maxlength="50" placeholder="Ex.: Patota de Terça" required /></label>
+            <div class="form-grid">
+              <label><span>Horário de início</span><input id="group-start-time" type="time" required /></label>
+              <label><span>Horário de fim</span><input id="group-end-time" type="time" required /></label>
+            </div>
+            <div class="info-box">Ao criar a patota, você entra automaticamente como atleta e organizador.</div>
             <p id="group-error" class="form-error" role="alert"></p>
+            <button class="button button--primary" type="submit">Criar patota</button>
           </form>
-        </article>
-
-        <article class="panel">
-          <div class="panel-heading management-heading">
-            <div>
-              <span class="section-kicker">PATOTAS</span>
-              <h3>Gerenciar patotas</h3>
-            </div>
-            <div class="status-filter" aria-label="Filtrar patotas">
-              <button class="status-filter__button is-active" type="button" data-group-filter="active">Ativas</button>
-              <button class="status-filter__button" type="button" data-group-filter="inactive">Inativas</button>
-            </div>
-          </div>
-          <div id="groups-list" class="card-list"></div>
-        </article>
-      </div>
-    </section>
-
-    <section class="page is-hidden" data-page-section="players">
-      <div id="players-no-group" class="empty-state is-hidden">
-        <span class="empty-state__icon">🏖️</span>
-        <strong>Primeiro escolha uma patota</strong>
-        <span>Assim saberemos onde os jogadores devem ser adicionados.</span>
-        <button class="button button--primary" type="button" data-go-to="groups">Escolher patota</button>
-      </div>
-
-      <div id="players-content" class="is-hidden">
-        <div class="page-heading page-heading--with-action">
-          <div>
-            <span class="section-kicker">PASSO 2</span>
-            <h2>Jogadores de <span id="players-group-name"></span></h2>
-            <p>Inativar preserva o histórico. Remover da patota afeta somente este grupo.</p>
-          </div>
-          <button class="button button--secondary" type="button" data-go-to="draw">Ir para o sorteio</button>
         </div>
+      </section>
 
+      <section class="page is-hidden" data-page-section="group-detail">
+        <div class="page-heading page-heading--with-action">
+          <div><span class="section-kicker">PATOTA</span><h1 id="detail-group-name">Patota</h1><p id="detail-group-schedule"></p></div>
+          <button class="button button--ghost" type="button" data-go-to="groups">← Voltar</button>
+        </div>
         <div class="stats-row">
-          <div class="stat-card"><span>Ativos</span><strong id="players-total-count">0</strong></div>
-          <div class="stat-card stat-card--left"><span>Esquerdas</span><strong id="players-left-count">0</strong></div>
-          <div class="stat-card stat-card--right"><span>Direitas</span><strong id="players-right-count">0</strong></div>
+          <div class="stat-card"><span>Atletas</span><strong id="detail-member-count">0</strong></div>
+          <div class="stat-card"><span>Confirmados hoje</span><strong id="detail-present-count">0</strong></div>
+          <div class="stat-card"><span>Horário</span><strong id="detail-time">--:--</strong></div>
         </div>
-
-        <div class="setup-grid setup-grid--players">
-          <article class="panel panel--highlight">
-            <span class="panel-icon">👤</span>
-            <h3>Novo jogador</h3>
-            <p id="player-target-group" class="helper-text"></p>
-            <form id="player-form" class="form-stack">
-              <label><span>Nome</span><input id="player-name" type="text" maxlength="50" placeholder="Ex.: Lucas" required /></label>
-              <label><span>Data de nascimento</span><input id="player-birth-date" type="date" required /></label>
-              <label>
-                <span>Lado que joga</span>
-                <select id="player-side" required>
-                  <option value="">Selecione</option>
-                  <option value="left">Esquerda</option>
-                  <option value="right">Direita</option>
-                </select>
-              </label>
-              <button class="button button--primary" type="submit">Adicionar jogador</button>
-              <p id="player-error" class="form-error" role="alert"></p>
-            </form>
-          </article>
-
-          <article class="panel">
-            <div class="panel-heading management-heading">
-              <div>
-                <span class="section-kicker">NA PATOTA</span>
-                <h3>Gerenciar jogadores</h3>
-              </div>
-              <div class="status-filter" aria-label="Filtrar jogadores">
-                <button class="status-filter__button is-active" type="button" data-player-filter="active">Ativos</button>
-                <button class="status-filter__button" type="button" data-player-filter="inactive">Inativos</button>
-              </div>
-            </div>
-
-            <div id="existing-player-box" class="existing-player-box is-hidden">
-              <div>
-                <strong>Jogador já existe no FuteMatch?</strong>
-                <small>Adicione-o a esta patota sem cadastrar novamente.</small>
-              </div>
-              <div class="inline-form">
-                <select id="existing-player-select"></select>
-                <button id="add-existing-player-button" class="button button--secondary" type="button">Adicionar</button>
-              </div>
-              <p id="existing-player-error" class="form-error" role="alert"></p>
-            </div>
-
-            <div id="players-list" class="card-list"></div>
-          </article>
+        <div class="content-grid">
+          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ATLETAS</span><h2>Quem faz parte</h2></div></div><div id="detail-members" class="member-list"></div></article>
+          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ORGANIZAÇÃO</span><h2>Adicionar atleta</h2></div></div><p class="muted">Adicione um atleta que já criou conta no FuteMatch.</p><div class="inline-form"><select id="detail-add-player-select"></select><button id="detail-add-player-button" class="button button--secondary" type="button">Adicionar</button></div><p id="detail-add-player-error" class="form-error"></p></article>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="page is-hidden" data-page-section="draw">
-      <div id="draw-empty-state" class="empty-state is-hidden">
-        <span class="empty-state__icon">🎲</span>
-        <strong id="draw-empty-title">Ainda não dá para sortear</strong>
-        <span id="draw-empty-description"></span>
-        <button id="draw-empty-action" class="button button--primary" type="button">Resolver agora</button>
-      </div>
+      <section class="page is-hidden" data-page-section="attendance">
+        <div class="page-heading"><div><span class="section-kicker">PRESENÇA</span><h1>Você vai hoje?</h1><p>Confirme sua presença em cada patota. Ir ao jogo vale <strong>1 ponto</strong>.</p></div><div class="date-badge" id="attendance-date-label"></div></div>
+        <div id="attendance-list" class="attendance-grid"></div>
+      </section>
 
-      <div id="draw-content" class="is-hidden">
-        <div class="page-heading page-heading--with-action">
-          <div>
-            <span class="section-kicker">PASSO 3</span>
-            <h2>Quem joga hoje?</h2>
-            <p id="draw-context"></p>
-          </div>
-          <div class="button-group">
-            <button id="select-all-button" class="button button--ghost" type="button">Selecionar todos</button>
-            <button id="clear-selection-button" class="button button--ghost" type="button">Limpar</button>
-          </div>
-        </div>
-
-        <form id="draw-form" novalidate>
-          <div class="players-grid">
-            <fieldset class="side-card side-card--left">
-              <legend><span class="side-dot"></span> Esquerdas</legend>
-              <div id="left-player-options" class="player-options"></div>
-            </fieldset>
-            <div class="versus" aria-hidden="true"><span>+</span></div>
-            <fieldset class="side-card side-card--right">
-              <legend><span class="side-dot"></span> Direitas</legend>
-              <div id="right-player-options" class="player-options"></div>
-            </fieldset>
-          </div>
-
-          <div class="selection-summary">
-            <div>
-              <strong id="selection-summary-title">0 jogadores selecionados</strong>
-              <span id="selection-summary-description">Selecione a mesma quantidade de cada lado.</span>
+      <section class="page is-hidden" data-page-section="draw">
+        <div class="page-heading"><div><span class="section-kicker">SORTEIO</span><h1>Montar as duplas</h1><p>Use os atletas da patota e salve as duplas para lançar os resultados da noite.</p></div><select id="draw-group-select" class="page-select"></select></div>
+        <div id="draw-empty" class="empty-state is-hidden"></div>
+        <div id="draw-content" class="is-hidden">
+          <form id="draw-form" novalidate>
+            <div class="players-grid">
+              <fieldset class="side-card side-card--left"><legend><span class="side-dot"></span> Esquerdas</legend><div id="left-player-options" class="player-options"></div></fieldset>
+              <div class="versus">+</div>
+              <fieldset class="side-card side-card--right"><legend><span class="side-dot"></span> Direitas</legend><div id="right-player-options" class="player-options"></div></fieldset>
             </div>
-            <button id="draw-button" class="button button--primary" type="submit">⚡ Sortear duplas</button>
-          </div>
-          <p id="form-error" class="form-error form-error--center" role="alert" aria-live="polite"></p>
-        </form>
+            <div class="selection-summary"><div><strong id="selection-summary-title"></strong><span id="selection-summary-description"></span></div><button id="draw-button" class="button button--primary" type="submit">⚡ Sortear duplas</button></div>
+            <p id="form-error" class="form-error form-error--center"></p>
+          </form>
+          <section id="results-section" class="results-section is-hidden"><div class="page-heading page-heading--with-action"><div><span class="section-kicker">DUPLAS DA NOITE</span><h2>Duplas sorteadas</h2><p>Elas serão usadas na tela de resultados.</p></div><button id="redraw-button" class="button button--secondary" type="button">Sortear novamente</button></div><div id="pairs-list" class="pairs-grid"></div></section>
+        </div>
+      </section>
 
-        <section id="results-section" class="results-section is-hidden" aria-live="polite">
-          <div class="page-heading page-heading--with-action">
-            <div><span class="section-kicker">RESULTADO</span><h2>Duplas sorteadas</h2></div>
-            <button id="redraw-button" class="button button--secondary" type="button">Sortear novamente</button>
-          </div>
-          <div id="pairs-list" class="pairs-grid"></div>
-        </section>
-      </div>
-    </section>
-  </main>
+      <section class="page is-hidden" data-page-section="results">
+        <div class="page-heading"><div><span class="section-kicker">RESULTADOS</span><h1>Resultados da noite</h1><p>Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.</p></div><div class="heading-controls"><select id="results-group-select" class="page-select"></select><input id="results-date" class="page-date" type="date" /></div></div>
+        <div class="content-grid content-grid--results">
+          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">DUPLAS</span><h2>Vitórias</h2></div></div><div id="pair-results-list" class="pair-results-list"></div></article>
+          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ADICIONAR</span><h2>Registrar outra dupla</h2></div></div><form id="manual-pair-form" class="form-stack"><label><span>Esquerda</span><select id="manual-left-player"></select></label><label><span>Direita</span><select id="manual-right-player"></select></label><label><span>Vitórias</span><input id="manual-wins" type="number" min="0" value="0" /></label><p id="manual-pair-error" class="form-error"></p><button class="button button--secondary" type="submit">Adicionar dupla</button></form></article>
+        </div>
+      </section>
+
+      <section class="page is-hidden" data-page-section="ranking">
+        <div class="page-heading"><div><span class="section-kicker">RANKING</span><h1>Quem está voando?</h1><p>Ranking individual da patota, separado por lado.</p></div><select id="ranking-group-select" class="page-select"></select></div>
+        <div class="score-rules"><span><strong>+1</strong> presença</span><span><strong>+1</strong> por vitória</span><span><strong>+5</strong> churrasco</span></div>
+        <div class="ranking-grid">
+          <article class="ranking-board"><div class="ranking-board__heading"><span class="side-dot side-dot--left"></span><div><span>RANKING</span><h2>Esquerdas</h2></div></div><div id="ranking-left" class="ranking-list"></div></article>
+          <article class="ranking-board"><div class="ranking-board__heading"><span class="side-dot side-dot--right"></span><div><span>RANKING</span><h2>Direitas</h2></div></div><div id="ranking-right" class="ranking-list"></div></article>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <template id="pair-template">
-    <article class="pair-card">
-      <div class="pair-number"></div>
-      <div class="pair-player pair-player--left"><span class="player-role">Esquerda</span><strong class="left-player-name"></strong></div>
-      <span class="pair-plus" aria-hidden="true">+</span>
-      <div class="pair-player pair-player--right"><span class="player-role">Direita</span><strong class="right-player-name"></strong></div>
-    </article>
+    <article class="pair-card"><div class="pair-number"></div><div class="pair-player pair-player--left"><span class="player-role">Esquerda</span><strong class="left-player-name"></strong></div><span class="pair-plus">+</span><div class="pair-player pair-player--right"><span class="player-role">Direita</span><strong class="right-player-name"></strong></div></article>
   </template>
 
   <script type="module" src="./src/js/app.js"></script>
