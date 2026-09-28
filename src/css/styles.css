@@ -192,3 +192,25 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
     flex-direction: column;
   }
 }
+
+
+/* Agenda semanal e janela de presença */
+.management-block {
+  margin-top: 0;
+}
+
+.management-divider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--border);
+}
+
+.attendance-locked {
+  margin-top: 16px;
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .02);
+  font-size: .78rem;
+}
