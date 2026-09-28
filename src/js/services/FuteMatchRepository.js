@@ -352,6 +352,26 @@ export class FuteMatchRepository {
       .map(Group.fromJSON);
   }
 
+  getGroupsForUser(userId, { includeInactive = false } = {}) {
+    const account = this.getAccountById(userId);
+
+    if (!account || account.active === false) {
+      return [];
+    }
+
+    return this.getGroupsByPlayer(account.playerId, { includeInactive });
+  }
+
+  isUserInGroup(userId, groupId) {
+    const account = this.getAccountById(userId);
+    return Boolean(account && this.isPlayerInGroup(account.playerId, groupId));
+  }
+
+  isGroupOrganizer(groupId, userId) {
+    const group = this.getState().groups.find((item) => item.id === groupId);
+    return Boolean(group?.ownerUserId && group.ownerUserId === userId);
+  }
+
   isPlayerInGroup(playerId, groupId) {
     return this.getState().memberships.some(
       (membership) =>
@@ -361,13 +381,27 @@ export class FuteMatchRepository {
     );
   }
 
-  addPlayerToGroup(playerId, groupId) {
-    const state = this.getState();
-    const player = state.players.find((item) => item.id === playerId);
+  #assertGroupOrganizer(state, groupId, actorUserId) {
     const group = state.groups.find((item) => item.id === groupId);
 
-    if (!player || !group) {
-      throw new Error("Jogador ou patota não encontrados.");
+    if (!group) {
+      throw new Error("Patota não encontrada.");
+    }
+
+    if (!group.ownerUserId || group.ownerUserId !== actorUserId) {
+      throw new Error("Somente o organizador da patota pode gerenciar atletas.");
+    }
+
+    return group;
+  }
+
+  addPlayerToGroup(playerId, groupId, actorUserId) {
+    const state = this.getState();
+    const player = state.players.find((item) => item.id === playerId);
+    const group = this.#assertGroupOrganizer(state, groupId, actorUserId);
+
+    if (!player) {
+      throw new Error("Jogador não encontrado.");
     }
 
     if (player.active === false) {
@@ -398,8 +432,17 @@ export class FuteMatchRepository {
     this.#save(state);
   }
 
-  removePlayerFromGroup(playerId, groupId) {
+  removePlayerFromGroup(playerId, groupId, actorUserId) {
     const state = this.getState();
+    const group = this.#assertGroupOrganizer(state, groupId, actorUserId);
+    const ownerAccount = state.accounts.find(
+      (account) => account.id === group.ownerUserId,
+    );
+
+    if (ownerAccount?.playerId === playerId) {
+      throw new Error("O organizador não pode remover a si mesmo da patota.");
+    }
+
     const membership = state.memberships.find(
       (item) => item.playerId === playerId && item.groupId === groupId,
     );
