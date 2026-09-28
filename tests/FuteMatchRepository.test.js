@@ -277,3 +277,39 @@ test("consulta por usuário retorna somente patotas ligadas ao atleta da conta",
     [linked.id],
   );
 });
+
+
+test("somente o organizador agenda churrasco e os pontos entram na data do evento", () => {
+  const repository = createRepository();
+  const group = createGroup(repository);
+  const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
+  const eventDate = dateFromToday(5);
+
+  assert.throws(
+    () => repository.scheduleBarbecue(group.id, eventDate, "outro-user"),
+    /somente o organizador/i,
+  );
+
+  const barbecue = repository.scheduleBarbecue(
+    group.id,
+    eventDate,
+    "user-1",
+  );
+
+  repository.setBarbecueConfirmation({
+    eventId: barbecue.id,
+    playerId: player.id,
+    status: "going",
+    currentDate: dateFromToday(),
+  });
+
+  const beforeEvent = RankingService.calculate(
+    repository.getRankingData(group.id, { asOfDate: dateFromToday() }),
+  );
+  assert.equal(beforeEvent.left[0].barbecuePoints, 0);
+
+  const onEventDate = RankingService.calculate(
+    repository.getRankingData(group.id, { asOfDate: eventDate }),
+  );
+  assert.equal(onEventDate.left[0].barbecuePoints, 4);
+});
