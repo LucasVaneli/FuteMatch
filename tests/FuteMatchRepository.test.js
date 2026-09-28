@@ -115,3 +115,108 @@ test("ranking soma presença, churrasco e vitórias para cada atleta da dupla", 
   assert.equal(ranking.left[0].totalPoints, 9);
   assert.equal(ranking.right[0].totalPoints, 4);
 });
+
+
+test("somente o organizador pode adicionar atletas à patota", () => {
+  const repository = createRepository();
+  const owner = repository.createPlayer({
+    name: "Organizador",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const guest = repository.createPlayer({
+    name: "Convidado",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const candidate = repository.createPlayer({
+    name: "Novo atleta",
+    birthDate: "1992-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+    ownerPlayerId: owner.id,
+  });
+
+  repository.addPlayerToGroup(guest.id, group.id, "owner-user");
+
+  assert.throws(
+    () => repository.addPlayerToGroup(candidate.id, group.id, "guest-user"),
+    /somente o organizador/i,
+  );
+
+  repository.addPlayerToGroup(candidate.id, group.id, "owner-user");
+  assert.equal(repository.isPlayerInGroup(candidate.id, group.id), true);
+});
+
+test("somente o organizador pode remover atletas e ele não pode remover a si mesmo", () => {
+  const repository = createRepository();
+  const owner = repository.createPlayer({
+    name: "Organizador",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const guest = repository.createPlayer({
+    name: "Convidado",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+
+  repository.createAccount({
+    email: "owner@example.test",
+    passwordHash: "hash-owner",
+    name: "Organizador",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+
+  const ownerAccount = repository.getAccountByEmail("owner@example.test");
+  const group = createGroup(repository, {
+    ownerUserId: ownerAccount.id,
+    ownerPlayerId: ownerAccount.playerId,
+  });
+
+  repository.addPlayerToGroup(guest.id, group.id, ownerAccount.id);
+
+  assert.throws(
+    () => repository.removePlayerFromGroup(guest.id, group.id, "guest-user"),
+    /somente o organizador/i,
+  );
+
+  assert.throws(
+    () => repository.removePlayerFromGroup(ownerAccount.playerId, group.id, ownerAccount.id),
+    /não pode remover a si mesmo/i,
+  );
+
+  repository.removePlayerFromGroup(guest.id, group.id, ownerAccount.id);
+  assert.equal(repository.isPlayerInGroup(guest.id, group.id), false);
+});
+
+test("consulta por usuário retorna somente patotas ligadas ao atleta da conta", () => {
+  const repository = createRepository();
+
+  repository.createAccount({
+    email: "lucas@example.test",
+    passwordHash: "hash",
+    name: "Lucas",
+    birthDate: "1999-03-31",
+    side: PLAYER_SIDE.LEFT,
+  });
+
+  const account = repository.getAccountByEmail("lucas@example.test");
+  const linked = createGroup(repository, {
+    name: "Patota ligada",
+    ownerUserId: account.id,
+    ownerPlayerId: account.playerId,
+  });
+  createGroup(repository, {
+    name: "Outra patota",
+    ownerUserId: "other-user",
+  });
+
+  assert.deepEqual(
+    repository.getGroupsForUser(account.id).map((group) => group.id),
+    [linked.id],
+  );
+});
