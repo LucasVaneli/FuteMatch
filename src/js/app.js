@@ -97,6 +97,18 @@ const showPage = (name) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
+const navigateTo = async (name) => {
+  try {
+    if (currentAccount()) {
+      await repository.sync();
+    }
+  } catch (error) {
+    showToast("Não foi possível atualizar os dados agora.");
+  }
+
+  showPage(name);
+};
+
 const showAuthTab = (tab) => {
   elements.authTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.authTab === tab));
   elements.loginForm.classList.toggle("is-hidden", tab !== "login");
@@ -548,8 +560,16 @@ elements.logoutButton.addEventListener("click", async () => {
 });
 
 // Navigation
-elements.navItems.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.page)));
-elements.goToButtons.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.goTo)));
+elements.navItems.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.page);
+  }),
+);
+elements.goToButtons.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.goTo);
+  }),
+);
 elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
 // Groups
