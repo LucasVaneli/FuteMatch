@@ -517,7 +517,7 @@ elements.barbecueList.addEventListener("click", (event) => {
     renderBarbecue();
     showToast(
       button.dataset.barbecueResponse === "going"
-        ? "Churrasco confirmado: +4 pontos após a data do evento."
+        ? "Churrasco confirmado. Os +4 pontos entram no ranking na data do evento."
         : "Você informou que não ficará no churrasco.",
     );
   } catch (error) {
