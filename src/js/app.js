@@ -2,12 +2,13 @@ import { GROUP_WEEKDAY_LABEL } from "./domain/Group.js";
 import { PLAYER_SIDE } from "./domain/Player.js";
 import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
-import { FuteMatchRepository } from "./services/FuteMatchRepository.js";
+import { SupabaseFuteMatchRepository } from "./services/SupabaseFuteMatchRepository.js";
 import { RankingService } from "./services/RankingService.js";
 import { DrawView } from "./ui/DrawView.js";
+import { supabase } from "./supabaseClient.js";
 
-const repository = new FuteMatchRepository();
-const authService = new AuthService(repository);
+const repository = new SupabaseFuteMatchRepository(supabase);
+const authService = new AuthService(supabase, repository);
 let toastTimer;
 
 const $ = (selector) => document.querySelector(selector);
@@ -16,7 +17,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const elements = {
   authScreen: $("#auth-screen"), app: $("#app"), authTabs: $$("[data-auth-tab]"),
   loginForm: $("#login-form"), loginEmail: $("#login-email"), loginPassword: $("#login-password"), loginError: $("#login-error"),
-  registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"),
+  registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"), registerMessage: $("#register-message"),
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
   myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
@@ -94,6 +95,18 @@ const showPage = (name) => {
   if (name === "results") renderResults();
   if (name === "ranking") renderRanking();
   window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const navigateTo = async (name) => {
+  try {
+    if (currentAccount()) {
+      await repository.sync();
+    }
+  } catch (error) {
+    showToast("Não foi possível atualizar os dados agora.");
+  }
+
+  showPage(name);
 };
 
 const showAuthTab = (tab) => {
@@ -430,12 +443,11 @@ const getSelectedPlayers = () => {
   return { leftPlayers: selected.filter((player) => player.side === PLAYER_SIDE.LEFT), rightPlayers: selected.filter((player) => player.side === PLAYER_SIDE.RIGHT) };
 };
 
-const handleDraw = () => {
+const handleDraw = async () => {
   try {
     drawView.clearError();
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
-    drawView.renderPairs(pairs);
     const attendanceWindow = repository.getAttendanceWindow(
       elements.drawGroupSelect.value,
       today(),
@@ -445,11 +457,12 @@ const handleDraw = () => {
       throw new Error(attendanceWindow.reason);
     }
 
-    repository.saveDrawPairs(
+    await repository.saveDrawPairs(
       elements.drawGroupSelect.value,
       attendanceWindow.targetDate,
       pairs,
     );
+    drawView.renderPairs(pairs);
     showToast("Duplas salvas para os resultados da noite.");
   } catch (error) { drawView.showError(error.message); }
 };
@@ -492,17 +505,95 @@ const enterAuth = () => { elements.app.classList.add("is-hidden"); elements.auth
 
 // Auth
 elements.authTabs.forEach((button) => button.addEventListener("click", () => showAuthTab(button.dataset.authTab)));
-elements.loginForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.loginError.textContent = ""; try { await authService.login(elements.loginEmail.value, elements.loginPassword.value); elements.loginForm.reset(); enterApp(); } catch (error) { elements.loginError.textContent = error.message; } });
-elements.registerForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.registerError.textContent = ""; try { await authService.register({ email: elements.registerEmail.value, password: elements.registerPassword.value, name: elements.registerName.value, birthDate: elements.registerBirthDate.value, side: elements.registerSide.value }); elements.registerForm.reset(); enterApp(); showToast("Conta criada. Bem-vindo ao FuteMatch!"); } catch (error) { elements.registerError.textContent = error.message; } });
-elements.logoutButton.addEventListener("click", () => { authService.logout(); enterAuth(); });
+elements.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.loginError.textContent = "";
+
+  try {
+    await authService.login(
+      elements.loginEmail.value,
+      elements.loginPassword.value,
+    );
+    elements.loginForm.reset();
+    enterApp();
+  } catch (error) {
+    elements.loginError.textContent = error.message;
+  }
+});
+
+elements.registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.registerError.textContent = "";
+  elements.registerMessage.textContent = "";
+
+  try {
+    const result = await authService.register({
+      email: elements.registerEmail.value,
+      password: elements.registerPassword.value,
+      name: elements.registerName.value,
+      birthDate: elements.registerBirthDate.value,
+      side: elements.registerSide.value,
+    });
+
+    if (result.requiresEmailConfirmation) {
+      elements.registerMessage.textContent =
+        "Conta criada. Confira seu e-mail para confirmar o cadastro e depois faça login.";
+      elements.registerPassword.value = "";
+      return;
+    }
+
+    elements.registerForm.reset();
+    enterApp();
+    showToast("Conta criada. Bem-vindo ao FuteMatch!");
+  } catch (error) {
+    elements.registerError.textContent = error.message;
+  }
+});
+
+elements.logoutButton.addEventListener("click", async () => {
+  try {
+    await authService.logout();
+    enterAuth();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 
 // Navigation
-elements.navItems.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.page)));
-elements.goToButtons.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.goTo)));
+elements.navItems.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.page);
+  }),
+);
+elements.goToButtons.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.goTo);
+  }),
+);
 elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
 // Groups
-elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, weekday: elements.groupWeekday.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
+elements.groupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.groupError.textContent = "";
+
+  try {
+    const group = await repository.createGroup({
+      name: elements.groupName.value,
+      weekday: elements.groupWeekday.value,
+      startTime: elements.groupStartTime.value,
+      endTime: elements.groupEndTime.value,
+    });
+
+    elements.groupForm.reset();
+    repository.setCurrentGroup(group.id);
+    renderApp();
+    showPage("group-detail");
+    showToast(`Patota “${group.name}” criada.`);
+  } catch (error) {
+    elements.groupError.textContent = error.message;
+  }
+});
 elements.myGroupsList.addEventListener("click", (event) => {
   const open = event.target.closest("[data-open-group]");
   const presence = event.target.closest("[data-presence-group]");
@@ -514,12 +605,12 @@ elements.myGroupsList.addEventListener("click", (event) => {
   else showPage("attendance");
 });
 
-elements.detailScheduleForm.addEventListener("submit", (event) => {
+elements.detailScheduleForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.detailScheduleError.textContent = "";
 
   try {
-    repository.updateGroupSchedule(
+    await repository.updateGroupSchedule(
       repository.getCurrentGroupId(),
       {
         weekday: elements.detailWeekday.value,
@@ -536,7 +627,7 @@ elements.detailScheduleForm.addEventListener("submit", (event) => {
   }
 });
 
-elements.detailAddPlayerButton.addEventListener("click", () => {
+elements.detailAddPlayerButton.addEventListener("click", async () => {
   elements.detailAddPlayerError.textContent = "";
   const groupId = repository.getCurrentGroupId();
   const playerId = elements.detailAddPlayerSelect.value;
@@ -544,7 +635,11 @@ elements.detailAddPlayerButton.addEventListener("click", () => {
   if (!playerId) return;
 
   try {
-    repository.addPlayerToGroup(playerId, groupId, currentAccount()?.id);
+    await repository.addPlayerToGroup(
+      playerId,
+      groupId,
+      currentAccount()?.id,
+    );
     renderGroupDetail();
     renderMyGroups();
     showToast("Atleta adicionado à patota.");
@@ -553,7 +648,7 @@ elements.detailAddPlayerButton.addEventListener("click", () => {
   }
 });
 
-elements.detailMembers.addEventListener("click", (event) => {
+elements.detailMembers.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-player]");
   if (!button) return;
 
@@ -565,7 +660,7 @@ elements.detailMembers.addEventListener("click", (event) => {
   if (!window.confirm(`Remover ${player.name} desta patota?`)) return;
 
   try {
-    repository.removePlayerFromGroup(
+    await repository.removePlayerFromGroup(
       player.id,
       groupId,
       currentAccount()?.id,
@@ -579,34 +674,38 @@ elements.detailMembers.addEventListener("click", (event) => {
 });
 
 // Attendance
-elements.attendanceList.addEventListener("click", (event) => {
+elements.attendanceList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-attendance]");
   if (!button) return;
 
-  repository.setAttendance({
-    groupId: button.dataset.groupId,
+  try {
+    await repository.setAttendance({
+      groupId: button.dataset.groupId,
     playerId: currentPlayer().id,
     date: button.dataset.attendanceDate,
     status: button.dataset.attendance,
-    currentDate: today(),
-  });
+      currentDate: today(),
+    });
 
-  renderAttendance();
-  renderMyGroups();
-  showToast(
-    button.dataset.attendance === "present"
-      ? "Presença confirmada: +2 pontos."
-      : "Ausência registrada.",
-  );
+    renderAttendance();
+    renderMyGroups();
+    showToast(
+      button.dataset.attendance === "present"
+        ? "Presença confirmada: +2 pontos."
+        : "Ausência registrada.",
+    );
+  } catch (error) {
+    showToast(error.message);
+  }
 });
 
 // Barbecue
-elements.barbecueForm.addEventListener("submit", (event) => {
+elements.barbecueForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.barbecueError.textContent = "";
 
   try {
-    repository.scheduleBarbecue(
+    await repository.scheduleBarbecue(
       elements.barbecueGroupSelect.value,
       elements.barbecueDate.value,
       currentAccount()?.id,
@@ -618,12 +717,12 @@ elements.barbecueForm.addEventListener("submit", (event) => {
   }
 });
 
-elements.barbecueList.addEventListener("click", (event) => {
+elements.barbecueList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-barbecue-response]");
   if (!button) return;
 
   try {
-    repository.setBarbecueConfirmation({
+    await repository.setBarbecueConfirmation({
       eventId: button.dataset.barbecueEvent,
       playerId: currentPlayer().id,
       status: button.dataset.barbecueResponse,
@@ -640,14 +739,14 @@ elements.barbecueList.addEventListener("click", (event) => {
   }
 });
 
-elements.barbecueOrganizerEvents.addEventListener("click", (event) => {
+elements.barbecueOrganizerEvents.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-cancel-barbecue]");
   if (!button) return;
 
   if (!window.confirm("Cancelar este churrasco?")) return;
 
   try {
-    repository.cancelBarbecue(
+    await repository.cancelBarbecue(
       button.dataset.cancelBarbecue,
       currentAccount()?.id,
     );
@@ -667,16 +766,77 @@ elements.drawGroupSelect.addEventListener("change", () => {
   }
 });
 elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
-elements.drawForm.addEventListener("submit", (event) => { event.preventDefault(); handleDraw(); });
-elements.redrawButton.addEventListener("click", handleDraw);
+elements.drawForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await handleDraw();
+});
+elements.redrawButton.addEventListener("click", async () => {
+  await handleDraw();
+});
 
 // Results
 elements.resultsGroupSelect.addEventListener("change", renderResults);
 elements.resultsDate.addEventListener("change", renderResults);
-elements.pairResultsList.addEventListener("change", (event) => { const input = event.target.closest("[data-result-wins]"); if (!input) return; repository.updatePairWins(input.dataset.resultWins, input.value); showToast("Vitórias atualizadas."); });
-elements.manualPairForm.addEventListener("submit", (event) => { event.preventDefault(); elements.manualPairError.textContent = ""; try { repository.addPairResult({ groupId: elements.resultsGroupSelect.value, date: elements.resultsDate.value || today(), leftPlayerId: elements.manualLeftPlayer.value, rightPlayerId: elements.manualRightPlayer.value, wins: elements.manualWins.value }); elements.manualWins.value = 0; renderResults(); showToast("Dupla registrada."); } catch (error) { elements.manualPairError.textContent = error.message; } });
+elements.pairResultsList.addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-result-wins]");
+  if (!input) return;
+
+  try {
+    await repository.updatePairWins(
+      input.dataset.resultWins,
+      input.value,
+    );
+    showToast("Vitórias atualizadas.");
+  } catch (error) {
+    showToast(error.message);
+    renderResults();
+  }
+});
+elements.manualPairForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.manualPairError.textContent = "";
+
+  try {
+    await repository.addPairResult({
+      groupId: elements.resultsGroupSelect.value,
+      date: elements.resultsDate.value || today(),
+      leftPlayerId: elements.manualLeftPlayer.value,
+      rightPlayerId: elements.manualRightPlayer.value,
+      wins: elements.manualWins.value,
+    });
+    elements.manualWins.value = 0;
+    renderResults();
+    showToast("Dupla registrada.");
+  } catch (error) {
+    elements.manualPairError.textContent = error.message;
+  }
+});
 
 // Ranking
 elements.rankingGroupSelect.addEventListener("change", renderRanking);
 
-if (authService.getCurrentAccount()) enterApp(); else enterAuth();
+await repository.initialize();
+
+if (authService.getCurrentAccount()) {
+  enterApp();
+} else {
+  enterAuth();
+}
+
+supabase.auth.onAuthStateChange((event, session) => {
+  setTimeout(async () => {
+    if (event === "SIGNED_IN" && session?.user) {
+      repository.setAuthenticatedUser(session.user);
+      await repository.sync();
+
+      if (elements.app.classList.contains("is-hidden")) {
+        enterApp();
+      }
+    }
+
+    if (event === "SIGNED_OUT") {
+      repository.setAuthenticatedUser(null);
+      enterAuth();
+    }
+  }, 0);
+});
