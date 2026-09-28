@@ -1,3 +1,4 @@
+import { GROUP_WEEKDAY_LABEL } from "./domain/Group.js";
 import { PLAYER_SIDE } from "./domain/Player.js";
 import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
@@ -18,8 +19,8 @@ const elements = {
   registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"),
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
-  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
-  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
+  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
+  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailScheduleForm: $("#detail-schedule-form"), detailWeekday: $("#detail-weekday"), detailStartTime: $("#detail-start-time"), detailEndTime: $("#detail-end-time"), detailScheduleError: $("#detail-schedule-error"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
@@ -44,8 +45,18 @@ const daysUntil = (value) => {
       86400000,
   );
 };
-const sideLabel = (side) => side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
-const scheduleLabel = (group) => group.startTime && group.endTime ? `${group.startTime} às ${group.endTime}` : "Horário não definido";
+const sideLabel = (side) =>
+  side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
+const weekdayLabel = (weekday) =>
+  GROUP_WEEKDAY_LABEL[Number(weekday)] ?? "Dia não definido";
+const scheduleLabel = (group) => {
+  const day = weekdayLabel(group.weekday);
+  const time =
+    group.startTime && group.endTime
+      ? `${group.startTime} às ${group.endTime}`
+      : "Horário não definido";
+  return `${day} • ${time}`;
+};
 
 const showToast = (message) => {
   clearTimeout(toastTimer); elements.toast.textContent = message; elements.toast.classList.add("is-visible");
@@ -116,13 +127,36 @@ const renderMyGroups = () => {
 
   const player = currentPlayer();
   const date = today();
-  elements.myGroupsList.innerHTML = groups.map((group) => {
-    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
-    const members = repository.getPlayersByGroup(group.id).length;
-    const isOwner = group.ownerUserId === currentAccount()?.id;
-    const status = attendance?.status === "present" ? "Confirmado hoje" : attendance?.status === "absent" ? "Ausente hoje" : "Presença pendente";
-    return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ''}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
-  }).join("");
+
+  elements.myGroupsList.innerHTML = groups
+    .map((group) => {
+      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+      const attendance = attendanceWindow.targetDate
+        ? repository.getPlayerAttendance(
+            group.id,
+            player.id,
+            attendanceWindow.targetDate,
+          )
+        : null;
+      const members = repository.getPlayersByGroup(group.id).length;
+      const isOwner = group.ownerUserId === currentAccount()?.id;
+
+      let status = "Dia não definido";
+      if (attendanceWindow.available) {
+        if (!attendanceWindow.isOpen) {
+          status = `Votação abre ${formatDate(attendanceWindow.opensOn)}`;
+        } else if (attendance?.status === "present") {
+          status = "Presença confirmada";
+        } else if (attendance?.status === "absent") {
+          status = "Ausência informada";
+        } else {
+          status = "Presença pendente";
+        }
+      }
+
+      return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ""}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+    })
+    .join("");
 };
 
 const renderGroupDetail = () => {
@@ -136,7 +170,10 @@ const renderGroupDetail = () => {
   }
 
   const players = repository.getPlayersByGroup(group.id);
-  const attendances = repository.getAttendance(group.id, today());
+  const attendanceWindow = repository.getAttendanceWindow(group.id, today());
+  const attendances = attendanceWindow.targetDate
+    ? repository.getAttendance(group.id, attendanceWindow.targetDate)
+    : [];
   const presentIds = new Set(
     attendances
       .filter((item) => item.status === "present")
@@ -146,7 +183,7 @@ const renderGroupDetail = () => {
   const ownerPlayerId = repository.getAccountById(group.ownerUserId)?.playerId;
 
   elements.detailGroupName.textContent = group.name;
-  elements.detailGroupSchedule.textContent = `Encontro das ${scheduleLabel(group)}.`;
+  elements.detailGroupSchedule.textContent = `Encontro: ${scheduleLabel(group)}.`;
   elements.detailMemberCount.textContent = players.length;
   elements.detailPresentCount.textContent = presentIds.size;
   elements.detailTime.textContent = group.startTime ?? "--:--";
@@ -154,7 +191,7 @@ const renderGroupDetail = () => {
     ? players
         .map(
           (player) =>
-            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) ? "✅ Confirmado hoje" : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
+            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
         )
         .join("")
     : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
@@ -163,8 +200,14 @@ const renderGroupDetail = () => {
 
   if (!isOwner) {
     elements.detailAddPlayerError.textContent = "";
+    elements.detailScheduleError.textContent = "";
     return;
   }
+
+  elements.detailWeekday.value = group.weekday ?? "";
+  elements.detailStartTime.value = group.startTime ?? "";
+  elements.detailEndTime.value = group.endTime ?? "";
+  elements.detailScheduleError.textContent = "";
 
   const available = repository.getPlayersNotInGroup(group.id);
   elements.detailAddPlayerSelect.disabled = !available.length;
@@ -185,7 +228,7 @@ const renderAttendance = () => {
   const player = currentPlayer();
   const date = today();
 
-  elements.attendanceDateLabel.textContent = `Hoje • ${formatDate(date)}`;
+  elements.attendanceDateLabel.textContent = "Janela • 2 dias antes";
 
   if (!groups.length) {
     elements.attendanceList.innerHTML =
@@ -195,10 +238,16 @@ const renderAttendance = () => {
 
   elements.attendanceList.innerHTML = groups
     .map((group) => {
+      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+
+      if (!attendanceWindow.available) {
+        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text">Configuração pendente</span></div><p>O organizador precisa definir o dia da semana desta patota antes de abrir a votação de presença.</p><div class="attendance-locked">Dia da semana ainda não definido.</div></article>`;
+      }
+
       const attendance = repository.getPlayerAttendance(
         group.id,
         player.id,
-        date,
+        attendanceWindow.targetDate,
       );
       const present = attendance?.status === "present";
       const absent = attendance?.status === "absent";
@@ -207,13 +256,26 @@ const renderAttendance = () => {
         : absent
           ? "status-text--absent"
           : "";
-      const statusText = present
-        ? "✓ Presença confirmada"
-        : absent
-          ? "Ausência informada"
-          : "Ainda não respondeu";
+      const statusText = attendanceWindow.isOpen
+        ? present
+          ? "✓ Presença confirmada"
+          : absent
+            ? "Ausência informada"
+            : "Votação aberta"
+        : "Votação fechada";
 
-      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirmar presença soma <strong>+2 pontos</strong> no ranking desta patota. Amanhã esta confirmação começa novamente em branco.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}">✕ Não vou</button></div></article>`;
+      const occurrenceText =
+        attendanceWindow.daysUntil === 0
+          ? "Hoje"
+          : attendanceWindow.daysUntil === 1
+            ? "Amanhã"
+            : `${weekdayLabel(group.weekday)}, ${formatDate(attendanceWindow.targetDate)}`;
+
+      if (!attendanceWindow.isOpen) {
+        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text">${statusText}</span></div><p>A próxima patota é em <strong>${formatDate(attendanceWindow.targetDate)}</strong>. A votação abre em <strong>${formatDate(attendanceWindow.opensOn)}</strong>, dois dias antes.</p><div class="attendance-locked">🔒 Aguarde a abertura da votação.</div></article>`;
+      }
+
+      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirme sua presença para <strong>${formatDate(attendanceWindow.targetDate)}</strong>. Participar vale <strong>+2 pontos</strong>.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✕ Não vou</button></div></article>`;
     })
     .join("");
 };
@@ -336,9 +398,26 @@ const renderDraw = () => {
   const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
   if (left.length < 2 || right.length < 2) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = `<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>`; return; }
   elements.drawEmpty.classList.add("is-hidden"); elements.drawContent.classList.remove("is-hidden");
-  const attendance = repository.getAttendance(selectedId, today());
+  const attendanceWindow = repository.getAttendanceWindow(selectedId, today());
+
+  if (!attendanceWindow.available) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Dia da semana não definido</strong><span>O organizador precisa configurar o dia da patota antes do sorteio.</span>';
+    return;
+  }
+
+  const attendance = repository.getAttendance(
+    selectedId,
+    attendanceWindow.targetDate,
+  );
   const hasResponses = attendance.length > 0;
-  const presentIds = new Set(attendance.filter((item) => item.status === "present").map((item) => item.playerId));
+  const presentIds = new Set(
+    attendance
+      .filter((item) => item.status === "present")
+      .map((item) => item.playerId),
+  );
   elements.leftPlayerOptions.innerHTML = left.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
   elements.rightPlayerOptions.innerHTML = right.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
   updateSelectionSummary();
@@ -357,7 +436,20 @@ const handleDraw = () => {
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
     drawView.renderPairs(pairs);
-    repository.saveDrawPairs(elements.drawGroupSelect.value, today(), pairs);
+    const attendanceWindow = repository.getAttendanceWindow(
+      elements.drawGroupSelect.value,
+      today(),
+    );
+
+    if (!attendanceWindow.available) {
+      throw new Error(attendanceWindow.reason);
+    }
+
+    repository.saveDrawPairs(
+      elements.drawGroupSelect.value,
+      attendanceWindow.targetDate,
+      pairs,
+    );
     showToast("Duplas salvas para os resultados da noite.");
   } catch (error) { drawView.showError(error.message); }
 };
@@ -410,7 +502,7 @@ elements.goToButtons.forEach((button) => button.addEventListener("click", () => 
 elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
 // Groups
-elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
+elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, weekday: elements.groupWeekday.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
 elements.myGroupsList.addEventListener("click", (event) => {
   const open = event.target.closest("[data-open-group]");
   const presence = event.target.closest("[data-presence-group]");
@@ -420,6 +512,28 @@ elements.myGroupsList.addEventListener("click", (event) => {
 
   if (open) showPage("group-detail");
   else showPage("attendance");
+});
+
+elements.detailScheduleForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  elements.detailScheduleError.textContent = "";
+
+  try {
+    repository.updateGroupSchedule(
+      repository.getCurrentGroupId(),
+      {
+        weekday: elements.detailWeekday.value,
+        startTime: elements.detailStartTime.value,
+        endTime: elements.detailEndTime.value,
+      },
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast("Dia e horário da patota atualizados.");
+  } catch (error) {
+    elements.detailScheduleError.textContent = error.message;
+  }
 });
 
 elements.detailAddPlayerButton.addEventListener("click", () => {
@@ -472,8 +586,9 @@ elements.attendanceList.addEventListener("click", (event) => {
   repository.setAttendance({
     groupId: button.dataset.groupId,
     playerId: currentPlayer().id,
-    date: today(),
+    date: button.dataset.attendanceDate,
     status: button.dataset.attendance,
+    currentDate: today(),
   });
 
   renderAttendance();
