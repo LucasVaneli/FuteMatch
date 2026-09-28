@@ -1,627 +1,259 @@
 import { PLAYER_SIDE } from "./domain/Player.js";
+import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
 import { FuteMatchRepository } from "./services/FuteMatchRepository.js";
+import { RankingService } from "./services/RankingService.js";
 import { DrawView } from "./ui/DrawView.js";
 
 const repository = new FuteMatchRepository();
+const authService = new AuthService(repository);
 let toastTimer;
-let groupFilterStatus = "active";
-let playerFilterStatus = "active";
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const elements = {
-  navButtons: [...document.querySelectorAll("[data-page]")],
-  pages: [...document.querySelectorAll("[data-page-section]")],
-  goToButtons: [...document.querySelectorAll("[data-go-to]")],
-  groupFilterButtons: [...document.querySelectorAll("[data-group-filter]")],
-  playerFilterButtons: [...document.querySelectorAll("[data-player-filter]")],
-  groupSwitcher: document.querySelector("#group-switcher"),
-  currentGroupSelect: document.querySelector("#current-group-select"),
-  groupForm: document.querySelector("#group-form"),
-  groupName: document.querySelector("#group-name"),
-  groupError: document.querySelector("#group-error"),
-  groupsList: document.querySelector("#groups-list"),
-  playersNoGroup: document.querySelector("#players-no-group"),
-  playersContent: document.querySelector("#players-content"),
-  playersGroupName: document.querySelector("#players-group-name"),
-  playersTotalCount: document.querySelector("#players-total-count"),
-  playersLeftCount: document.querySelector("#players-left-count"),
-  playersRightCount: document.querySelector("#players-right-count"),
-  playerTargetGroup: document.querySelector("#player-target-group"),
-  playerForm: document.querySelector("#player-form"),
-  playerName: document.querySelector("#player-name"),
-  playerBirthDate: document.querySelector("#player-birth-date"),
-  playerSide: document.querySelector("#player-side"),
-  playerError: document.querySelector("#player-error"),
-  playersList: document.querySelector("#players-list"),
-  existingPlayerBox: document.querySelector("#existing-player-box"),
-  existingPlayerSelect: document.querySelector("#existing-player-select"),
-  addExistingPlayerButton: document.querySelector("#add-existing-player-button"),
-  existingPlayerError: document.querySelector("#existing-player-error"),
-  drawEmptyState: document.querySelector("#draw-empty-state"),
-  drawEmptyTitle: document.querySelector("#draw-empty-title"),
-  drawEmptyDescription: document.querySelector("#draw-empty-description"),
-  drawEmptyAction: document.querySelector("#draw-empty-action"),
-  drawContent: document.querySelector("#draw-content"),
-  drawContext: document.querySelector("#draw-context"),
-  drawForm: document.querySelector("#draw-form"),
-  leftPlayerOptions: document.querySelector("#left-player-options"),
-  rightPlayerOptions: document.querySelector("#right-player-options"),
-  selectAllButton: document.querySelector("#select-all-button"),
-  clearSelectionButton: document.querySelector("#clear-selection-button"),
-  selectionSummaryTitle: document.querySelector("#selection-summary-title"),
-  selectionSummaryDescription: document.querySelector("#selection-summary-description"),
-  drawButton: document.querySelector("#draw-button"),
-  redrawButton: document.querySelector("#redraw-button"),
-  formError: document.querySelector("#form-error"),
-  resultsSection: document.querySelector("#results-section"),
-  pairsList: document.querySelector("#pairs-list"),
-  pairTemplate: document.querySelector("#pair-template"),
-  toast: document.querySelector("#toast"),
+  authScreen: $("#auth-screen"), app: $("#app"), authTabs: $$("[data-auth-tab]"),
+  loginForm: $("#login-form"), loginEmail: $("#login-email"), loginPassword: $("#login-password"), loginError: $("#login-error"),
+  registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"),
+  sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
+  profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
+  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
+  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
+  attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
+  drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
+  resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
+  rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
 };
 
-const drawView = new DrawView({
-  resultsSection: elements.resultsSection,
-  pairsList: elements.pairsList,
-  pairTemplate: elements.pairTemplate,
-  errorElement: elements.formError,
-  playerInputs: [],
-});
+const drawView = new DrawView({ resultsSection: elements.resultsSection, pairsList: elements.pairsList, pairTemplate: elements.pairTemplate, errorElement: elements.formError });
 
-const escapeHtml = (value) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-
-const formatDate = (date) =>
-  new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
-    new Date(`${date}T00:00:00Z`),
-  );
-
-const getCurrentGroup = () => {
-  const currentGroupId = repository.getCurrentGroupId();
-  return repository.getGroups().find((group) => group.id === currentGroupId) ?? null;
+const escapeHtml = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+const today = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
+const formatDate = (value) => new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00`));
+const sideLabel = (side) => side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
+const scheduleLabel = (group) => group.startTime && group.endTime ? `${group.startTime} às ${group.endTime}` : "Horário não definido";
 
 const showToast = (message) => {
-  clearTimeout(toastTimer);
-  elements.toast.textContent = message;
-  elements.toast.classList.add("is-visible");
-  toastTimer = setTimeout(() => elements.toast.classList.remove("is-visible"), 2800);
+  clearTimeout(toastTimer); elements.toast.textContent = message; elements.toast.classList.add("is-visible");
+  toastTimer = setTimeout(() => elements.toast.classList.remove("is-visible"), 2600);
 };
 
-const showPage = (pageName) => {
-  elements.pages.forEach((page) => {
-    page.classList.toggle("is-hidden", page.dataset.pageSection !== pageName);
-  });
+const currentPlayer = () => repository.getCurrentPlayer();
+const currentAccount = () => repository.getCurrentAccount();
+const myGroups = () => currentPlayer() ? repository.getGroupsByPlayer(currentPlayer().id) : [];
 
-  elements.navButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.page === pageName);
-  });
-
+const showPage = (name) => {
+  elements.pages.forEach((page) => page.classList.toggle("is-hidden", page.dataset.pageSection !== name));
+  elements.navItems.forEach((item) => item.classList.toggle("is-active", item.dataset.page === name));
+  elements.sidebar.classList.remove("is-open");
+  if (name === "groups") renderMyGroups();
+  if (name === "group-detail") renderGroupDetail();
+  if (name === "attendance") renderAttendance();
+  if (name === "draw") renderDraw();
+  if (name === "results") renderResults();
+  if (name === "ranking") renderRanking();
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
-const updateFilterButtons = (buttons, currentStatus, dataAttribute) => {
-  buttons.forEach((button) => {
-    button.classList.toggle(
-      "is-active",
-      button.dataset[dataAttribute] === currentStatus,
-    );
-  });
+const showAuthTab = (tab) => {
+  elements.authTabs.forEach((button) => button.classList.toggle("is-active", button.dataset.authTab === tab));
+  elements.loginForm.classList.toggle("is-hidden", tab !== "login");
+  elements.registerForm.classList.toggle("is-hidden", tab !== "register");
 };
 
-const renderGroupSwitcher = () => {
-  const groups = repository.getGroups();
-  const currentGroupId = repository.getCurrentGroupId();
-
-  elements.groupSwitcher.classList.toggle("is-hidden", groups.length === 0);
-  elements.currentGroupSelect.innerHTML = groups
-    .map(
-      (group) =>
-        `<option value="${group.id}" ${group.id === currentGroupId ? "selected" : ""}>${escapeHtml(group.name)}</option>`,
-    )
-    .join("");
+const renderProfile = () => {
+  const player = currentPlayer();
+  if (!player) return;
+  elements.profileAvatar.textContent = player.name.charAt(0).toUpperCase();
+  elements.profileName.textContent = player.name;
+  elements.profileSide.textContent = sideLabel(player.side);
+  elements.welcomeTitle.textContent = `Fala, ${player.name.split(" ")[0]}!`;
 };
 
-const renderGroups = () => {
-  const showingActive = groupFilterStatus === "active";
-  const groups = repository.getGroups({ active: showingActive });
-  const currentGroupId = repository.getCurrentGroupId();
+const groupOptions = (select, groups, preferredId) => {
+  const selected = preferredId && groups.some((group) => group.id === preferredId) ? preferredId : groups[0]?.id;
+  select.innerHTML = groups.length ? groups.map((group) => `<option value="${group.id}" ${group.id === selected ? "selected" : ""}>${escapeHtml(group.name)}</option>`).join("") : '<option value="">Nenhuma patota</option>';
+  return selected ?? null;
+};
 
-  updateFilterButtons(
-    elements.groupFilterButtons,
-    groupFilterStatus,
-    "groupFilter",
-  );
-
+const renderMyGroups = () => {
+  const groups = myGroups();
   if (!groups.length) {
-    elements.groupsList.innerHTML = `
-      <div class="empty-state empty-state--compact">
-        <span class="empty-state__icon">${showingActive ? "🏖️" : "📦"}</span>
-        <strong>${showingActive ? "Nenhuma patota ativa" : "Nenhuma patota inativa"}</strong>
-        <span>${showingActive ? "Crie a primeira usando o formulário ao lado." : "Quando uma patota for inativada, ela aparecerá aqui."}</span>
-      </div>`;
+    elements.myGroupsList.innerHTML = `<div class="empty-state"><strong>Você ainda não está em nenhuma patota</strong><span>Crie a sua primeira patota ou peça para um organizador adicionar seu atleta.</span><button class="button button--primary" type="button" data-empty-create>+ Criar patota</button></div>`;
+    elements.myGroupsList.querySelector("[data-empty-create]")?.addEventListener("click", () => showPage("create-group"));
     return;
   }
 
-  elements.groupsList.innerHTML = groups
-    .map((group) => {
-      const members = repository.getPlayersByGroup(group.id, {
-        includeInactive: true,
-      });
-      const activePlayers = members.filter((player) => player.active !== false);
-      const isCurrent = group.id === currentGroupId && group.active !== false;
-
-      const actionButtons = showingActive
-        ? `
-          <button class="button ${isCurrent ? "button--ghost" : "button--secondary"} button--small" type="button" data-select-group="${group.id}">
-            ${isCurrent ? "Abrir" : "Escolher"}
-          </button>
-          <button class="button button--danger-ghost button--small" type="button" data-set-group-active="false" data-group-id="${group.id}">
-            Inativar
-          </button>`
-        : `
-          <button class="button button--secondary button--small" type="button" data-set-group-active="true" data-group-id="${group.id}">
-            Reativar
-          </button>`;
-
-      return `
-        <article class="list-card ${isCurrent ? "list-card--active" : ""} ${showingActive ? "" : "list-card--inactive"}">
-          <div>
-            <span class="list-card__tag">${showingActive ? (isCurrent ? "Selecionada" : "Ativa") : "Inativa"}</span>
-            <strong>${escapeHtml(group.name)}</strong>
-            <small>${activePlayers.length} jogador${activePlayers.length === 1 ? "" : "es"} ativo${activePlayers.length === 1 ? "" : "s"}</small>
-          </div>
-          <div class="row-actions">${actionButtons}</div>
-        </article>`;
-    })
-    .join("");
+  const player = currentPlayer();
+  const date = today();
+  elements.myGroupsList.innerHTML = groups.map((group) => {
+    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
+    const members = repository.getPlayersByGroup(group.id).length;
+    const isOwner = group.ownerUserId === currentAccount()?.id;
+    const status = attendance?.status === "present" ? "Confirmado hoje" : attendance?.status === "absent" ? "Ausente hoje" : "Presença pendente";
+    return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span>${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ''}</div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__meta"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+  }).join("");
 };
 
-const renderPlayers = () => {
-  const group = getCurrentGroup();
+const renderGroupDetail = () => {
+  const group = repository.getGroupById(repository.getCurrentGroupId());
+  if (!group) { showPage("groups"); return; }
+  const players = repository.getPlayersByGroup(group.id);
+  const attendances = repository.getAttendance(group.id, today());
+  const presentIds = new Set(attendances.filter((item) => item.status === "present").map((item) => item.playerId));
+  elements.detailGroupName.textContent = group.name;
+  elements.detailGroupSchedule.textContent = `Encontro das ${scheduleLabel(group)}.`;
+  elements.detailMemberCount.textContent = players.length;
+  elements.detailPresentCount.textContent = presentIds.size;
+  elements.detailTime.textContent = group.startTime ?? "--:--";
+  elements.detailMembers.innerHTML = players.length ? players.map((player) => `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) ? "✅ Confirmado hoje" : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span></div>`).join("") : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
 
-  elements.playersNoGroup.classList.toggle("is-hidden", Boolean(group));
-  elements.playersContent.classList.toggle("is-hidden", !group);
-
-  if (!group) return;
-
-  const allPlayers = repository.getPlayersByGroup(group.id, {
-    includeInactive: true,
-  });
-  const activePlayers = allPlayers.filter((player) => player.active !== false);
-  const leftPlayers = activePlayers.filter(
-    (player) => player.side === PLAYER_SIDE.LEFT,
-  );
-  const rightPlayers = activePlayers.filter(
-    (player) => player.side === PLAYER_SIDE.RIGHT,
-  );
-  const showingActive = playerFilterStatus === "active";
-  const visiblePlayers = allPlayers.filter(
-    (player) => (player.active !== false) === showingActive,
-  );
-
-  updateFilterButtons(
-    elements.playerFilterButtons,
-    playerFilterStatus,
-    "playerFilter",
-  );
-
-  elements.playersGroupName.textContent = group.name;
-  elements.playerTargetGroup.textContent = `Este jogador será adicionado automaticamente à patota “${group.name}”.`;
-  elements.playersTotalCount.textContent = activePlayers.length;
-  elements.playersLeftCount.textContent = leftPlayers.length;
-  elements.playersRightCount.textContent = rightPlayers.length;
-
-  if (!visiblePlayers.length) {
-    elements.playersList.innerHTML = `
-      <div class="empty-state empty-state--compact">
-        <span class="empty-state__icon">${showingActive ? "👥" : "🛌"}</span>
-        <strong>${showingActive ? "Nenhum jogador ativo nesta patota" : "Nenhum jogador inativo nesta patota"}</strong>
-        <span>${showingActive ? "Cadastre um jogador novo ou adicione alguém que já existe no FuteMatch." : "Jogadores inativados aparecerão aqui e poderão ser reativados."}</span>
-      </div>`;
-  } else {
-    elements.playersList.innerHTML = visiblePlayers
-      .map((player) => {
-        const sideLabel =
-          player.side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
-        const actions = showingActive
-          ? `
-            <button class="button button--ghost button--small" type="button" data-remove-player="${player.id}">Remover da patota</button>
-            <button class="button button--danger-ghost button--small" type="button" data-set-player-active="false" data-player-id="${player.id}">Inativar</button>`
-          : `
-            <button class="button button--secondary button--small" type="button" data-set-player-active="true" data-player-id="${player.id}">Reativar</button>`;
-
-        return `
-          <article class="player-row ${showingActive ? "" : "player-row--inactive"}">
-            <span class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</span>
-            <div class="player-row__identity">
-              <strong>${escapeHtml(player.name)}</strong>
-              <small>${formatDate(player.birthDate)}</small>
-            </div>
-            <span class="side-pill side-pill--${player.side}">${sideLabel}</span>
-            ${showingActive ? "" : '<span class="status-pill">Inativo</span>'}
-            <div class="row-actions">${actions}</div>
-          </article>`;
-      })
-      .join("");
-  }
-
-  const availablePlayers = repository.getPlayersNotInGroup(group.id);
-  const showExistingPlayerBox =
-    showingActive && availablePlayers.length > 0;
-
-  elements.existingPlayerBox.classList.toggle(
-    "is-hidden",
-    !showExistingPlayerBox,
-  );
-  elements.existingPlayerSelect.innerHTML = availablePlayers
-    .map((player) => {
-      const sideLabel =
-        player.side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
-      return `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel}</option>`;
-    })
-    .join("");
+  const isOwner = !group.ownerUserId || group.ownerUserId === currentAccount()?.id;
+  const available = repository.getPlayersNotInGroup(group.id);
+  elements.detailAddPlayerSelect.disabled = !isOwner || !available.length;
+  elements.detailAddPlayerButton.disabled = !isOwner || !available.length;
+  elements.detailAddPlayerSelect.innerHTML = available.length ? available.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel(player.side)}</option>`).join("") : '<option value="">Nenhum atleta disponível</option>';
+  elements.detailAddPlayerError.textContent = isOwner ? "" : "Somente o organizador pode adicionar atletas.";
 };
 
-const playerOption = (player) => `
-  <label class="player-select-card">
-    <input type="checkbox" data-draw-player="${player.id}" data-player-side="${player.side}" checked />
-    <span class="avatar avatar--small">${escapeHtml(player.name.charAt(0).toUpperCase())}</span>
-    <span class="player-select-card__text"><strong>${escapeHtml(player.name)}</strong><small>${formatDate(player.birthDate)}</small></span>
-  </label>`;
+const renderAttendance = () => {
+  const groups = myGroups();
+  const player = currentPlayer();
+  const date = today();
+  elements.attendanceDateLabel.textContent = `Hoje • ${formatDate(date)}`;
+  if (!groups.length) { elements.attendanceList.innerHTML = '<div class="empty-state"><strong>Sem patotas</strong><span>Entre em uma patota para confirmar presença.</span></div>'; return; }
+  elements.attendanceList.innerHTML = groups.map((group) => {
+    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
+    const present = attendance?.status === "present";
+    const absent = attendance?.status === "absent";
+    const statusClass = present ? "status-text--present" : absent ? "status-text--absent" : "";
+    const statusText = present ? "✓ Presença confirmada" : absent ? "Ausência informada" : "Ainda não respondeu";
+    return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirmar presença soma <strong>+1 ponto</strong> no ranking desta patota.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}">✕ Não vou</button></div><label class="barbecue-toggle"><input type="checkbox" data-barbecue="${group.id}" ${attendance?.barbecue ? "checked" : ""} ${present ? "" : "disabled"}/><span><strong>🔥 Vou ficar no churrasco</strong><small>Vale +5 pontos. Disponível após confirmar presença.</small></span></label></article>`;
+  }).join("");
+};
+
+const playerOption = (player, checked) => `<label class="player-select-card"><input type="checkbox" data-draw-player="${player.id}" data-player-side="${player.side}" ${checked ? "checked" : ""}/><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><span class="player-select-card__text"><strong>${escapeHtml(player.name)}</strong><small>${sideLabel(player.side)}</small></span></label>`;
 
 const updateSelectionSummary = () => {
-  const selected = [...document.querySelectorAll("[data-draw-player]:checked")];
-  const leftCount = selected.filter(
-    (input) => input.dataset.playerSide === PLAYER_SIDE.LEFT,
-  ).length;
-  const rightCount = selected.filter(
-    (input) => input.dataset.playerSide === PLAYER_SIDE.RIGHT,
-  ).length;
-  const isValid = leftCount >= 2 && leftCount === rightCount;
-
-  elements.selectionSummaryTitle.textContent = `${selected.length} jogador${selected.length === 1 ? "" : "es"} selecionado${selected.length === 1 ? "" : "s"}`;
-
-  if (isValid) {
-    elements.selectionSummaryDescription.textContent = `${leftCount} de esquerda + ${rightCount} de direita • ${leftCount} duplas serão formadas.`;
-  } else if (leftCount < 2 || rightCount < 2) {
-    elements.selectionSummaryDescription.textContent =
-      "Selecione pelo menos 2 jogadores de cada lado.";
-  } else {
-    elements.selectionSummaryDescription.textContent = `Agora há ${leftCount} de esquerda e ${rightCount} de direita. Deixe as quantidades iguais.`;
-  }
-
-  elements.drawButton.disabled = !isValid;
+  const selected = $$('[data-draw-player]:checked');
+  const left = selected.filter((input) => input.dataset.playerSide === PLAYER_SIDE.LEFT).length;
+  const right = selected.filter((input) => input.dataset.playerSide === PLAYER_SIDE.RIGHT).length;
+  const valid = left >= 2 && left === right;
+  elements.selectionSummaryTitle.textContent = `${selected.length} atletas selecionados`;
+  elements.selectionSummaryDescription.textContent = valid ? `${left} duplas serão formadas.` : `Selecione a mesma quantidade dos dois lados (mínimo 2 + 2).`;
+  elements.drawButton.disabled = !valid;
 };
 
 const renderDraw = () => {
-  const group = getCurrentGroup();
-  drawView.clearError();
-  drawView.clearResults();
-
-  if (!group) {
-    elements.drawContent.classList.add("is-hidden");
-    elements.drawEmptyState.classList.remove("is-hidden");
-    elements.drawEmptyTitle.textContent = "Escolha uma patota primeiro";
-    elements.drawEmptyDescription.textContent =
-      "O sorteio precisa saber qual grupo de jogadores usar.";
-    elements.drawEmptyAction.textContent = "Escolher patota";
-    elements.drawEmptyAction.dataset.targetPage = "groups";
-    return;
-  }
-
-  const players = repository.getPlayersByGroup(group.id);
-  const leftPlayers = players.filter(
-    (player) => player.side === PLAYER_SIDE.LEFT,
-  );
-  const rightPlayers = players.filter(
-    (player) => player.side === PLAYER_SIDE.RIGHT,
-  );
-  const canDraw = leftPlayers.length >= 2 && rightPlayers.length >= 2;
-
-  elements.drawEmptyState.classList.toggle("is-hidden", canDraw);
-  elements.drawContent.classList.toggle("is-hidden", !canDraw);
-
-  if (!canDraw) {
-    elements.drawEmptyTitle.textContent =
-      "Faltam jogadores para formar as duplas";
-    elements.drawEmptyDescription.textContent = `${group.name} precisa ter pelo menos 2 jogadores ativos de esquerda e 2 de direita. Hoje há ${leftPlayers.length} de esquerda e ${rightPlayers.length} de direita.`;
-    elements.drawEmptyAction.textContent = "Gerenciar jogadores";
-    elements.drawEmptyAction.dataset.targetPage = "players";
-    return;
-  }
-
-  elements.drawContext.textContent = `${group.name} • desmarque apenas quem não vai jogar hoje.`;
-  elements.leftPlayerOptions.innerHTML = leftPlayers.map(playerOption).join("");
-  elements.rightPlayerOptions.innerHTML = rightPlayers.map(playerOption).join("");
+  const groups = myGroups();
+  const selectedId = groupOptions(elements.drawGroupSelect, groups, elements.drawGroupSelect.value || repository.getCurrentGroupId());
+  drawView.clearResults(); drawView.clearError();
+  if (!selectedId) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = '<strong>Você ainda não possui patotas para sortear.</strong>'; return; }
+  repository.setCurrentGroup(selectedId);
+  const players = repository.getPlayersByGroup(selectedId);
+  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
+  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
+  if (left.length < 2 || right.length < 2) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = `<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>`; return; }
+  elements.drawEmpty.classList.add("is-hidden"); elements.drawContent.classList.remove("is-hidden");
+  const attendance = repository.getAttendance(selectedId, today());
+  const hasResponses = attendance.length > 0;
+  const presentIds = new Set(attendance.filter((item) => item.status === "present").map((item) => item.playerId));
+  elements.leftPlayerOptions.innerHTML = left.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
+  elements.rightPlayerOptions.innerHTML = right.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
   updateSelectionSummary();
-};
-
-const renderAll = () => {
-  renderGroupSwitcher();
-  renderGroups();
-  renderPlayers();
-  renderDraw();
 };
 
 const getSelectedPlayers = () => {
-  const group = getCurrentGroup();
-  const groupPlayers = group ? repository.getPlayersByGroup(group.id) : [];
-  const selectedIds = new Set(
-    [...document.querySelectorAll("[data-draw-player]:checked")].map(
-      (input) => input.dataset.drawPlayer,
-    ),
-  );
-  const selected = groupPlayers.filter((player) => selectedIds.has(player.id));
-
-  return {
-    leftPlayers: selected.filter(
-      (player) => player.side === PLAYER_SIDE.LEFT,
-    ),
-    rightPlayers: selected.filter(
-      (player) => player.side === PLAYER_SIDE.RIGHT,
-    ),
-  };
+  const groupId = elements.drawGroupSelect.value;
+  const selectedIds = new Set($$('[data-draw-player]:checked').map((input) => input.dataset.drawPlayer));
+  const selected = repository.getPlayersByGroup(groupId).filter((player) => selectedIds.has(player.id));
+  return { leftPlayers: selected.filter((player) => player.side === PLAYER_SIDE.LEFT), rightPlayers: selected.filter((player) => player.side === PLAYER_SIDE.RIGHT) };
 };
 
 const handleDraw = () => {
-  drawView.clearError();
-
   try {
+    drawView.clearError();
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
-    drawView.renderPairs(DrawService.createPairs(leftPlayers, rightPlayers));
-  } catch (error) {
-    drawView.showError(error.message);
-  }
+    const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
+    drawView.renderPairs(pairs);
+    repository.saveDrawPairs(elements.drawGroupSelect.value, today(), pairs);
+    showToast("Duplas salvas para os resultados da noite.");
+  } catch (error) { drawView.showError(error.message); }
 };
 
-const getInitialPage = () => {
-  const groups = repository.getGroups();
-  if (!groups.length) return "groups";
-
-  const group = getCurrentGroup();
-  if (!group) return "groups";
-
-  const players = repository.getPlayersByGroup(group.id);
-  const leftCount = players.filter(
-    (player) => player.side === PLAYER_SIDE.LEFT,
-  ).length;
-  const rightCount = players.filter(
-    (player) => player.side === PLAYER_SIDE.RIGHT,
-  ).length;
-
-  return leftCount >= 2 && rightCount >= 2 ? "draw" : "players";
+const renderResults = () => {
+  const groups = myGroups();
+  const groupId = groupOptions(elements.resultsGroupSelect, groups, elements.resultsGroupSelect.value || repository.getCurrentGroupId());
+  if (!elements.resultsDate.value) elements.resultsDate.value = today();
+  if (!groupId) { elements.pairResultsList.innerHTML = '<div class="empty-state"><span>Nenhuma patota disponível.</span></div>'; return; }
+  const date = elements.resultsDate.value;
+  const players = repository.getPlayersByGroup(groupId);
+  const byId = new Map(players.map((player) => [player.id, player]));
+  const results = repository.getPairResults(groupId, date);
+  elements.pairResultsList.innerHTML = results.length ? results.map((result) => `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div><label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label></div>`).join("") : '<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>Faça o sorteio ou adicione uma dupla manualmente.</span></div>';
+  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
+  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
+  elements.manualLeftPlayer.innerHTML = left.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+  elements.manualRightPlayer.innerHTML = right.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
 };
 
-elements.navButtons.forEach((button) => {
-  button.addEventListener("click", () => showPage(button.dataset.page));
-});
+const rankingRows = (items) => items.length ? items.map((item, index) => `<div class="ranking-row"><span class="ranking-position">${index + 1}</span><div class="ranking-athlete"><strong>${escapeHtml(item.player.name)}</strong><small>${item.wins} vitórias • ${item.nights} presenças • ${item.barbecues} churrascos</small></div><div class="ranking-score"><strong>${item.totalPoints}</strong><small>pontos</small></div></div>`).join("") : '<div class="empty-state"><span>Ainda não há pontuação.</span></div>';
 
-elements.goToButtons.forEach((button) => {
-  button.addEventListener("click", () => showPage(button.dataset.goTo));
-});
+const renderRanking = () => {
+  const groups = myGroups();
+  const groupId = groupOptions(elements.rankingGroupSelect, groups, elements.rankingGroupSelect.value || repository.getCurrentGroupId());
+  if (!groupId) { elements.rankingLeft.innerHTML = elements.rankingRight.innerHTML = '<div class="empty-state"><span>Sem patotas.</span></div>'; return; }
+  const ranking = RankingService.calculate(repository.getRankingData(groupId));
+  elements.rankingLeft.innerHTML = rankingRows(ranking.left);
+  elements.rankingRight.innerHTML = rankingRows(ranking.right);
+};
 
-elements.groupFilterButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    groupFilterStatus = button.dataset.groupFilter;
-    renderGroups();
-  });
-});
+const renderApp = () => {
+  renderProfile(); renderMyGroups();
+  const groups = myGroups();
+  if (groups.length && !repository.getCurrentGroupId()) repository.setCurrentGroup(groups[0].id);
+};
 
-elements.playerFilterButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    playerFilterStatus = button.dataset.playerFilter;
-    renderPlayers();
-  });
-});
+const enterApp = () => { elements.authScreen.classList.add("is-hidden"); elements.app.classList.remove("is-hidden"); renderApp(); showPage("groups"); };
+const enterAuth = () => { elements.app.classList.add("is-hidden"); elements.authScreen.classList.remove("is-hidden"); showAuthTab("login"); };
 
-elements.currentGroupSelect.addEventListener("change", () => {
-  repository.setCurrentGroup(elements.currentGroupSelect.value);
-  playerFilterStatus = "active";
-  renderAll();
-  showPage("players");
-  showToast("Patota alterada.");
-});
+// Auth
+elements.authTabs.forEach((button) => button.addEventListener("click", () => showAuthTab(button.dataset.authTab)));
+elements.loginForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.loginError.textContent = ""; try { await authService.login(elements.loginEmail.value, elements.loginPassword.value); elements.loginForm.reset(); enterApp(); } catch (error) { elements.loginError.textContent = error.message; } });
+elements.registerForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.registerError.textContent = ""; try { await authService.register({ email: elements.registerEmail.value, password: elements.registerPassword.value, name: elements.registerName.value, birthDate: elements.registerBirthDate.value, side: elements.registerSide.value }); elements.registerForm.reset(); enterApp(); showToast("Conta criada. Bem-vindo ao FuteMatch!"); } catch (error) { elements.registerError.textContent = error.message; } });
+elements.logoutButton.addEventListener("click", () => { authService.logout(); enterAuth(); });
 
-elements.groupsList.addEventListener("click", (event) => {
-  const selectButton = event.target.closest("[data-select-group]");
-  if (selectButton) {
-    repository.setCurrentGroup(selectButton.dataset.selectGroup);
-    playerFilterStatus = "active";
-    renderAll();
-    showPage("players");
-    return;
-  }
+// Navigation
+elements.navItems.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.page)));
+elements.goToButtons.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.goTo)));
+elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
-  const statusButton = event.target.closest("[data-set-group-active]");
-  if (!statusButton) return;
+// Groups
+elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
+elements.myGroupsList.addEventListener("click", (event) => { const open = event.target.closest("[data-open-group]"); const presence = event.target.closest("[data-presence-group]"); const groupId = open?.dataset.openGroup ?? presence?.dataset.presenceGroup; if (!groupId) return; repository.setCurrentGroup(groupId); if (open) showPage("group-detail"); else showPage("attendance"); });
+elements.detailAddPlayerButton.addEventListener("click", () => { elements.detailAddPlayerError.textContent = ""; const groupId = repository.getCurrentGroupId(); const playerId = elements.detailAddPlayerSelect.value; if (!playerId) return; try { repository.addPlayerToGroup(playerId, groupId); renderGroupDetail(); renderMyGroups(); showToast("Atleta adicionado à patota."); } catch (error) { elements.detailAddPlayerError.textContent = error.message; } });
 
-  const groupId = statusButton.dataset.groupId;
-  const shouldActivate = statusButton.dataset.setGroupActive === "true";
-  const group = repository
-    .getGroups({ active: null })
-    .find((item) => item.id === groupId);
+// Attendance
+elements.attendanceList.addEventListener("click", (event) => { const button = event.target.closest("[data-attendance]"); if (!button) return; repository.setAttendance({ groupId: button.dataset.groupId, playerId: currentPlayer().id, date: today(), status: button.dataset.attendance, barbecue: false }); renderAttendance(); renderMyGroups(); showToast(button.dataset.attendance === "present" ? "Presença confirmada: +1 ponto." : "Ausência registrada."); });
+elements.attendanceList.addEventListener("change", (event) => { const checkbox = event.target.closest("[data-barbecue]"); if (!checkbox) return; const groupId = checkbox.dataset.barbecue; repository.setAttendance({ groupId, playerId: currentPlayer().id, date: today(), status: "present", barbecue: checkbox.checked }); renderAttendance(); showToast(checkbox.checked ? "Churrasco marcado: +5 pontos." : "Churrasco desmarcado."); });
 
-  if (!group) return;
-
-  if (
-    !shouldActivate &&
-    !window.confirm(
-      `Inativar a patota “${group.name}”?\n\nEla deixará de aparecer nos sorteios, mas jogadores e histórico serão preservados.`,
-    )
-  ) {
-    return;
-  }
-
-  repository.setGroupActive(groupId, shouldActivate);
-  renderAll();
-  showPage("groups");
-  showToast(
-    shouldActivate
-      ? `Patota “${group.name}” reativada.`
-      : `Patota “${group.name}” inativada.`,
-  );
-});
-
-elements.groupForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  elements.groupError.textContent = "";
-
-  try {
-    const group = repository.createGroup(elements.groupName.value);
-    repository.setCurrentGroup(group.id);
-    groupFilterStatus = "active";
-    playerFilterStatus = "active";
-    elements.groupForm.reset();
-    renderAll();
-    showPage("players");
-    showToast(`Patota “${group.name}” criada. Agora adicione os jogadores.`);
-  } catch (error) {
-    elements.groupError.textContent = error.message;
-  }
-});
-
-elements.playerForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  elements.playerError.textContent = "";
-
-  const group = getCurrentGroup();
-  if (!group) {
-    showPage("groups");
-    return;
-  }
-
-  try {
-    const player = repository.createPlayer({
-      name: elements.playerName.value,
-      birthDate: elements.playerBirthDate.value,
-      side: elements.playerSide.value,
-      groupIds: [group.id],
-    });
-    playerFilterStatus = "active";
-    elements.playerForm.reset();
-    renderAll();
-    showPage("players");
-    showToast(`${player.name} foi adicionado à patota.`);
-    elements.playerName.focus();
-  } catch (error) {
-    elements.playerError.textContent = error.message;
-  }
-});
-
-elements.playersList.addEventListener("click", (event) => {
-  const group = getCurrentGroup();
-  if (!group) return;
-
-  const removeButton = event.target.closest("[data-remove-player]");
-  if (removeButton) {
-    const playerId = removeButton.dataset.removePlayer;
-    const player = repository
-      .getPlayers({ active: null })
-      .find((item) => item.id === playerId);
-
-    if (
-      player &&
-      window.confirm(
-        `Remover ${player.name} da patota “${group.name}”?\n\nO jogador continuará cadastrado no FuteMatch e nas outras patotas.`,
-      )
-    ) {
-      repository.removePlayerFromGroup(playerId, group.id);
-      renderAll();
-      showPage("players");
-      showToast(`${player.name} foi removido apenas desta patota.`);
-    }
-    return;
-  }
-
-  const statusButton = event.target.closest("[data-set-player-active]");
-  if (!statusButton) return;
-
-  const playerId = statusButton.dataset.playerId;
-  const shouldActivate = statusButton.dataset.setPlayerActive === "true";
-  const player = repository
-    .getPlayers({ active: null })
-    .find((item) => item.id === playerId);
-
-  if (!player) return;
-
-  if (
-    !shouldActivate &&
-    !window.confirm(
-      `Inativar ${player.name}?\n\nEle deixará de aparecer nos sorteios de todas as patotas, mas continuará no cadastro e no histórico.`,
-    )
-  ) {
-    return;
-  }
-
-  repository.setPlayerActive(playerId, shouldActivate);
-  renderAll();
-  showPage("players");
-  showToast(
-    shouldActivate
-      ? `${player.name} foi reativado.`
-      : `${player.name} foi inativado.`,
-  );
-});
-
-elements.addExistingPlayerButton.addEventListener("click", () => {
-  elements.existingPlayerError.textContent = "";
-  const group = getCurrentGroup();
-  const playerId = elements.existingPlayerSelect.value;
-  if (!group || !playerId) return;
-
-  try {
-    repository.addPlayerToGroup(playerId, group.id);
-    const player = repository
-      .getPlayers({ active: null })
-      .find((item) => item.id === playerId);
-    playerFilterStatus = "active";
-    renderAll();
-    showPage("players");
-    showToast(`${player?.name ?? "Jogador"} foi adicionado à patota.`);
-  } catch (error) {
-    elements.existingPlayerError.textContent = error.message;
-  }
-});
-
-elements.drawEmptyAction.addEventListener("click", () => {
-  showPage(elements.drawEmptyAction.dataset.targetPage);
-});
-
-elements.drawForm.addEventListener("change", (event) => {
-  if (!event.target.matches("[data-draw-player]")) return;
-  drawView.clearResults();
-  drawView.clearError();
-  updateSelectionSummary();
-});
-
-elements.drawForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  handleDraw();
-});
-
+// Draw
+elements.drawGroupSelect.addEventListener("change", () => { repository.setCurrentGroup(elements.drawGroupSelect.value); renderDraw(); });
+elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
+elements.drawForm.addEventListener("submit", (event) => { event.preventDefault(); handleDraw(); });
 elements.redrawButton.addEventListener("click", handleDraw);
 
-elements.selectAllButton.addEventListener("click", () => {
-  document.querySelectorAll("[data-draw-player]").forEach((input) => {
-    input.checked = true;
-  });
-  drawView.clearResults();
-  updateSelectionSummary();
-});
+// Results
+elements.resultsGroupSelect.addEventListener("change", renderResults);
+elements.resultsDate.addEventListener("change", renderResults);
+elements.pairResultsList.addEventListener("change", (event) => { const input = event.target.closest("[data-result-wins]"); if (!input) return; repository.updatePairWins(input.dataset.resultWins, input.value); showToast("Vitórias atualizadas."); });
+elements.manualPairForm.addEventListener("submit", (event) => { event.preventDefault(); elements.manualPairError.textContent = ""; try { repository.addPairResult({ groupId: elements.resultsGroupSelect.value, date: elements.resultsDate.value || today(), leftPlayerId: elements.manualLeftPlayer.value, rightPlayerId: elements.manualRightPlayer.value, wins: elements.manualWins.value }); elements.manualWins.value = 0; renderResults(); showToast("Dupla registrada."); } catch (error) { elements.manualPairError.textContent = error.message; } });
 
-elements.clearSelectionButton.addEventListener("click", () => {
-  document.querySelectorAll("[data-draw-player]").forEach((input) => {
-    input.checked = false;
-  });
-  drawView.clearError();
-  drawView.clearResults();
-  updateSelectionSummary();
-});
+// Ranking
+elements.rankingGroupSelect.addEventListener("change", renderRanking);
 
-renderAll();
-showPage(getInitialPage());
+if (authService.getCurrentAccount()) enterApp(); else enterAuth();

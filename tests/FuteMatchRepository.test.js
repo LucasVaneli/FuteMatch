@@ -2,160 +2,116 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { FuteMatchRepository } from "../src/js/services/FuteMatchRepository.js";
+import { RankingService } from "../src/js/services/RankingService.js";
 import { PLAYER_SIDE } from "../src/js/domain/Player.js";
 
 class MemoryStorage {
-  constructor() {
-    this.data = new Map();
-  }
-
-  getItem(key) {
-    return this.data.has(key) ? this.data.get(key) : null;
-  }
-
-  setItem(key, value) {
-    this.data.set(key, value);
-  }
+  constructor() { this.data = new Map(); }
+  getItem(key) { return this.data.has(key) ? this.data.get(key) : null; }
+  setItem(key, value) { this.data.set(key, value); }
 }
 
 const createRepository = () => new FuteMatchRepository(new MemoryStorage());
 
-const createPlayer = (repository, groupId, name = "Lucas") =>
+const createGroup = (repository, overrides = {}) =>
+  repository.createGroup({
+    name: overrides.name ?? "Terça",
+    startTime: overrides.startTime ?? "19:00",
+    endTime: overrides.endTime ?? "21:00",
+    ownerUserId: overrides.ownerUserId ?? "user-1",
+    ownerPlayerId: overrides.ownerPlayerId,
+  });
+
+const createPlayer = (repository, groupId, name, side) =>
   repository.createPlayer({
     name,
     birthDate: "1999-03-31",
-    side: PLAYER_SIDE.LEFT,
+    side,
     groupIds: [groupId],
   });
 
-test("jogador pode pertencer a várias patotas", () => {
+test("patota exige horário de início e fim", () => {
   const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
+  assert.throws(
+    () => repository.createGroup({ name: "Terça", startTime: "", endTime: "21:00" }),
+    /horários/i,
+  );
+});
 
-  const player = repository.createPlayer({
+test("criador entra automaticamente na patota", () => {
+  const repository = createRepository();
+  const owner = repository.createPlayer({
     name: "Lucas",
     birthDate: "1999-03-31",
     side: PLAYER_SIDE.LEFT,
-    groupIds: [groupA.id, groupB.id],
+  });
+  const group = createGroup(repository, { ownerPlayerId: owner.id });
+  assert.equal(repository.getPlayersByGroup(group.id)[0].id, owner.id);
+});
+
+test("presença e churrasco ficam registrados por noite", () => {
+  const repository = createRepository();
+  const group = createGroup(repository);
+  const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
+
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: player.id,
+    date: "2026-09-28",
+    status: "present",
+    barbecue: true,
   });
 
-  assert.equal(repository.getPlayersByGroup(groupA.id)[0].id, player.id);
-  assert.equal(repository.getPlayersByGroup(groupB.id)[0].id, player.id);
-  assert.equal(repository.getGroupsByPlayer(player.id).length, 2);
+  const attendance = repository.getPlayerAttendance(group.id, player.id, "2026-09-28");
+  assert.equal(attendance.status, "present");
+  assert.equal(attendance.barbecue, true);
 });
 
-test("consulta da patota retorna somente seus jogadores", () => {
+test("ausência remove indicação de churrasco", () => {
   const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
+  const group = createGroup(repository);
+  const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
 
-  createPlayer(repository, groupA.id, "Lucas");
-
-  repository.createPlayer({
-    name: "Pedro",
-    birthDate: "2000-01-01",
-    side: PLAYER_SIDE.RIGHT,
-    groupIds: [groupB.id],
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: player.id,
+    date: "2026-09-28",
+    status: "absent",
+    barbecue: true,
   });
 
-  assert.deepEqual(repository.getPlayersByGroup(groupA.id).map((player) => player.name), ["Lucas"]);
-  assert.deepEqual(repository.getPlayersByGroup(groupB.id).map((player) => player.name), ["Pedro"]);
+  assert.equal(repository.getPlayerAttendance(group.id, player.id, "2026-09-28").barbecue, false);
 });
 
-test("jogador existente pode ser adicionado a outra patota sem novo cadastro", () => {
+test("ranking soma presença, churrasco e vitórias para cada atleta da dupla", () => {
   const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
+  const group = createGroup(repository);
+  const left = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
+  const right = createPlayer(repository, group.id, "Pedro", PLAYER_SIDE.RIGHT);
 
-  const player = createPlayer(repository, groupA.id);
-
-  repository.addPlayerToGroup(player.id, groupB.id);
-
-  assert.equal(repository.getPlayers({ active: null }).length, 1);
-  assert.equal(repository.getPlayersByGroup(groupB.id)[0].id, player.id);
-  assert.equal(repository.getGroupsByPlayer(player.id).length, 2);
-});
-
-test("lista jogadores ainda disponíveis para uma patota", () => {
-  const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
-
-  createPlayer(repository, groupA.id, "Lucas");
-
-  repository.createPlayer({
-    name: "Pedro",
-    birthDate: "2000-01-01",
-    side: PLAYER_SIDE.RIGHT,
-    groupIds: [groupB.id],
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: left.id,
+    date: "2026-09-28",
+    status: "present",
+    barbecue: true,
+  });
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: right.id,
+    date: "2026-09-28",
+    status: "present",
+    barbecue: false,
+  });
+  repository.addPairResult({
+    groupId: group.id,
+    date: "2026-09-28",
+    leftPlayerId: left.id,
+    rightPlayerId: right.id,
+    wins: 3,
   });
 
-  assert.deepEqual(repository.getPlayersNotInGroup(groupA.id).map((player) => player.name), ["Pedro"]);
-});
-
-test("inativar jogador preserva cadastro e remove dos sorteios", () => {
-  const repository = createRepository();
-  const group = repository.createGroup("Terça");
-  const player = createPlayer(repository, group.id);
-
-  repository.setPlayerActive(player.id, false);
-
-  assert.equal(repository.getPlayersByGroup(group.id).length, 0);
-  assert.equal(repository.getPlayersByGroup(group.id, { includeInactive: true }).length, 1);
-  assert.equal(repository.getPlayers({ active: false })[0].id, player.id);
-});
-
-test("jogador inativo pode ser reativado", () => {
-  const repository = createRepository();
-  const group = repository.createGroup("Terça");
-  const player = createPlayer(repository, group.id);
-
-  repository.setPlayerActive(player.id, false);
-  repository.setPlayerActive(player.id, true);
-
-  assert.equal(repository.getPlayersByGroup(group.id)[0].id, player.id);
-});
-
-test("remover jogador de uma patota preserva o jogador e outras patotas", () => {
-  const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
-  const player = repository.createPlayer({
-    name: "Lucas",
-    birthDate: "1999-03-31",
-    side: PLAYER_SIDE.LEFT,
-    groupIds: [groupA.id, groupB.id],
-  });
-
-  repository.removePlayerFromGroup(player.id, groupA.id);
-
-  assert.equal(repository.getPlayersByGroup(groupA.id).length, 0);
-  assert.equal(repository.getPlayersByGroup(groupB.id)[0].id, player.id);
-  assert.equal(repository.getPlayers({ active: null })[0].id, player.id);
-  assert.equal(repository.getPlayersNotInGroup(groupA.id)[0].id, player.id);
-});
-
-test("inativar patota preserva cadastro e troca a patota atual", () => {
-  const repository = createRepository();
-  const groupA = repository.createGroup("Terça");
-  const groupB = repository.createGroup("Sexta");
-  repository.setCurrentGroup(groupA.id);
-
-  repository.setGroupActive(groupA.id, false);
-
-  assert.deepEqual(repository.getGroups().map((group) => group.name), ["Sexta"]);
-  assert.deepEqual(repository.getGroups({ active: false }).map((group) => group.name), ["Terça"]);
-  assert.equal(repository.getCurrentGroupId(), groupB.id);
-});
-
-test("patota inativa pode ser reativada", () => {
-  const repository = createRepository();
-  const group = repository.createGroup("Terça");
-
-  repository.setGroupActive(group.id, false);
-  repository.setGroupActive(group.id, true);
-
-  assert.equal(repository.getGroups()[0].id, group.id);
-  assert.equal(repository.getCurrentGroupId(), group.id);
+  const ranking = RankingService.calculate(repository.getRankingData(group.id));
+  assert.equal(ranking.left[0].totalPoints, 9);
+  assert.equal(ranking.right[0].totalPoints, 4);
 });
