@@ -52,7 +52,8 @@
           <label><span>Lado que joga</span><select id="register-side" required><option value="">Selecione</option><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
         </div>
         <label><span>Senha</span><input id="register-password" type="password" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
-        <p class="form-hint">Nesta versão de demonstração, a conta fica salva apenas neste navegador. O login real será conectado ao Supabase depois.</p>
+        <p class="form-hint">Sua conta e seus dados ficam sincronizados no Supabase para você acessar pelo celular ou computador.</p>
+        <p id="register-message" class="form-success" role="status"></p>
         <p id="register-error" class="form-error" role="alert"></p>
         <button class="button button--primary button--full" type="submit">Criar minha conta</button>
       </form>
