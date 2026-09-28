@@ -1,4 +1,4 @@
-import { Group } from "../domain/Group.js";
+import { Group, GROUP_WEEKDAY } from "../domain/Group.js";
 import { Player } from "../domain/Player.js";
 
 const STORAGE_KEY = "futematch:data:v2";
@@ -30,6 +30,8 @@ const matchesActiveStatus = (item, active) =>
 
 const isValidTime = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value ?? "");
 const isValidDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
+const VALID_WEEKDAYS = new Set(Object.values(GROUP_WEEKDAY));
+const isValidWeekday = (value) => VALID_WEEKDAYS.has(Number(value));
 const dateKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -39,6 +41,17 @@ const daysBetween = (fromDate, toDate) => {
   const from = Date.UTC(fromYear, fromMonth - 1, fromDay);
   const to = Date.UTC(toYear, toMonth - 1, toDay);
   return Math.round((to - from) / 86400000);
+};
+
+const addDays = (date, amount) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + amount));
+  return `${result.getUTCFullYear()}-${String(result.getUTCMonth() + 1).padStart(2, "0")}-${String(result.getUTCDate()).padStart(2, "0")}`;
+};
+
+const weekdayOf = (date) => {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 };
 
 export class FuteMatchRepository {
@@ -202,11 +215,22 @@ export class FuteMatchRepository {
     this.#save(state);
   }
 
-  createGroup({ name, startTime, endTime, ownerUserId, ownerPlayerId }) {
+  createGroup({
+    name,
+    weekday,
+    startTime,
+    endTime,
+    ownerUserId,
+    ownerPlayerId,
+  }) {
     const state = this.getState();
 
     if (!name?.trim()) {
       throw new Error("Informe o nome da patota.");
+    }
+
+    if (!isValidWeekday(weekday)) {
+      throw new Error("Informe o dia da semana da patota.");
     }
 
     if (!isValidTime(startTime) || !isValidTime(endTime)) {
@@ -221,7 +245,12 @@ export class FuteMatchRepository {
       throw new Error("Já existe uma patota com esse nome.");
     }
 
-    const group = new Group(name, { startTime, endTime, ownerUserId });
+    const group = new Group(name, {
+      weekday: Number(weekday),
+      startTime,
+      endTime,
+      ownerUserId,
+    });
     state.groups.push(group);
 
     if (ownerPlayerId) {
@@ -236,6 +265,79 @@ export class FuteMatchRepository {
     state.currentGroupId = group.id;
     this.#save(state);
     return group;
+  }
+
+  updateGroupSchedule(
+    groupId,
+    { weekday, startTime, endTime },
+    actorUserId,
+  ) {
+    const state = this.getState();
+    const group = this.#assertGroupOrganizer(state, groupId, actorUserId);
+
+    if (!isValidWeekday(weekday)) {
+      throw new Error("Informe o dia da semana da patota.");
+    }
+
+    if (!isValidTime(startTime) || !isValidTime(endTime)) {
+      throw new Error("Informe os horários de início e fim da patota.");
+    }
+
+    if (startTime === endTime) {
+      throw new Error("O horário de início e fim não podem ser iguais.");
+    }
+
+    group.weekday = Number(weekday);
+    group.startTime = startTime;
+    group.endTime = endTime;
+    group.updatedAt = new Date().toISOString();
+
+    this.#save(state);
+    return Group.fromJSON(group);
+  }
+
+  getAttendanceWindow(groupId, currentDate = dateKey()) {
+    const group = this.getState().groups.find((item) => item.id === groupId);
+
+    if (!group || group.active === false) {
+      return {
+        available: false,
+        isOpen: false,
+        targetDate: null,
+        opensOn: null,
+        daysUntil: null,
+        reason: "Patota não encontrada ou inativa.",
+      };
+    }
+
+    if (!isValidWeekday(group.weekday)) {
+      return {
+        available: false,
+        isOpen: false,
+        targetDate: null,
+        opensOn: null,
+        daysUntil: null,
+        reason: "O organizador precisa definir o dia da semana da patota.",
+      };
+    }
+
+    if (!isValidDate(currentDate)) {
+      throw new Error("Data atual inválida.");
+    }
+
+    const currentWeekday = weekdayOf(currentDate);
+    const daysUntil = (Number(group.weekday) - currentWeekday + 7) % 7;
+    const targetDate = addDays(currentDate, daysUntil);
+    const opensOn = addDays(targetDate, -2);
+
+    return {
+      available: true,
+      isOpen: daysUntil <= 2,
+      targetDate,
+      opensOn,
+      daysUntil,
+      reason: daysUntil <= 2 ? null : "A votação abre 2 dias antes da patota.",
+    };
   }
 
   setGroupActive(groupId, active) {
@@ -687,7 +789,13 @@ export class FuteMatchRepository {
     return session ? { ...session } : null;
   }
 
-  setAttendance({ groupId, playerId, date, status }) {
+  setAttendance({
+    groupId,
+    playerId,
+    date,
+    status,
+    currentDate = dateKey(),
+  }) {
     if (!groupId || !playerId || !date) {
       throw new Error("Dados de presença incompletos.");
     }
@@ -698,6 +806,20 @@ export class FuteMatchRepository {
 
     if (!this.isPlayerInGroup(playerId, groupId)) {
       throw new Error("O atleta não pertence a esta patota.");
+    }
+
+    const attendanceWindow = this.getAttendanceWindow(groupId, currentDate);
+
+    if (!attendanceWindow.available) {
+      throw new Error(attendanceWindow.reason);
+    }
+
+    if (!attendanceWindow.isOpen) {
+      throw new Error("A votação de presença abre 2 dias antes da patota.");
+    }
+
+    if (attendanceWindow.targetDate !== date) {
+      throw new Error("A presença deve ser confirmada para a próxima patota.");
     }
 
     const state = this.getState();
