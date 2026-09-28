@@ -93,10 +93,11 @@
       </section>
 
       <section class="page is-hidden" data-page-section="create-group">
-        <div class="page-heading"><div><span class="section-kicker">NOVA PATOTA</span><h1>Criar patota</h1><p>Informe o nome e o horário fixo do encontro.</p></div></div>
+        <div class="page-heading"><div><span class="section-kicker">NOVA PATOTA</span><h1>Criar patota</h1><p>Informe o nome, o dia da semana e o horário fixo do encontro.</p></div></div>
         <div class="narrow-panel">
           <form id="group-form" class="form-stack" novalidate>
             <label><span>Nome da patota</span><input id="group-name" type="text" maxlength="50" placeholder="Ex.: Patota de Terça" required /></label>
+            <label><span>Dia da semana</span><select id="group-weekday" required><option value="">Selecione</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option></select></label>
             <div class="form-grid">
               <label><span>Horário de início</span><input id="group-start-time" type="time" required /></label>
               <label><span>Horário de fim</span><input id="group-end-time" type="time" required /></label>
@@ -115,17 +116,33 @@
         </div>
         <div class="stats-row">
           <div class="stat-card"><span>Atletas</span><strong id="detail-member-count">0</strong></div>
-          <div class="stat-card"><span>Confirmados hoje</span><strong id="detail-present-count">0</strong></div>
+          <div class="stat-card"><span>Confirmados próxima patota</span><strong id="detail-present-count">0</strong></div>
           <div class="stat-card"><span>Horário</span><strong id="detail-time">--:--</strong></div>
         </div>
         <div class="content-grid">
           <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ATLETAS</span><h2>Quem faz parte</h2></div></div><div id="detail-members" class="member-list"></div></article>
-          <article id="detail-management-panel" class="panel"><div class="panel-heading"><div><span class="section-kicker">ORGANIZAÇÃO</span><h2>Gerenciar atletas</h2></div></div><p class="muted">Somente o organizador pode adicionar ou remover atletas desta patota.</p><div class="inline-form"><select id="detail-add-player-select"></select><button id="detail-add-player-button" class="button button--secondary" type="button">Adicionar</button></div><p id="detail-add-player-error" class="form-error"></p></article>
+          <article id="detail-management-panel" class="panel">
+            <div class="panel-heading"><div><span class="section-kicker">ORGANIZAÇÃO</span><h2>Configurar patota</h2></div></div>
+            <form id="detail-schedule-form" class="form-stack management-block" novalidate>
+              <label><span>Dia da semana</span><select id="detail-weekday" required><option value="">Selecione</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option></select></label>
+              <div class="form-grid">
+                <label><span>Início</span><input id="detail-start-time" type="time" required /></label>
+                <label><span>Fim</span><input id="detail-end-time" type="time" required /></label>
+              </div>
+              <p id="detail-schedule-error" class="form-error"></p>
+              <button class="button button--secondary" type="submit">Salvar dia e horário</button>
+            </form>
+            <div class="management-divider"></div>
+            <div class="panel-heading"><div><span class="section-kicker">ATLETAS</span><h2>Gerenciar atletas</h2></div></div>
+            <p class="muted">Somente o organizador pode adicionar ou remover atletas desta patota.</p>
+            <div class="inline-form"><select id="detail-add-player-select"></select><button id="detail-add-player-button" class="button button--secondary" type="button">Adicionar</button></div>
+            <p id="detail-add-player-error" class="form-error"></p>
+          </article>
         </div>
       </section>
 
       <section class="page is-hidden" data-page-section="attendance">
-        <div class="page-heading"><div><span class="section-kicker">PRESENÇA</span><h1>Você vai hoje?</h1><p>Confirme sua presença em cada patota. Ir ao jogo vale <strong>2 pontos</strong>. A cada novo dia, a confirmação começa novamente sem resposta.</p></div><div class="date-badge" id="attendance-date-label"></div></div>
+        <div class="page-heading"><div><span class="section-kicker">PRESENÇA</span><h1>Você vai na próxima?</h1><p>A votação abre <strong>2 dias antes</strong> de cada patota e fecha após o dia do encontro. Confirmar presença vale <strong>2 pontos</strong>.</p></div><div class="date-badge" id="attendance-date-label"></div></div>
         <div id="attendance-list" class="attendance-grid"></div>
       </section>
 
