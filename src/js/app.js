@@ -19,7 +19,7 @@ const elements = {
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
   myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
-  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
+  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
   resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
@@ -44,7 +44,22 @@ const showToast = (message) => {
 
 const currentPlayer = () => repository.getCurrentPlayer();
 const currentAccount = () => repository.getCurrentAccount();
-const myGroups = () => currentPlayer() ? repository.getGroupsByPlayer(currentPlayer().id) : [];
+const myGroups = () => currentAccount()
+  ? repository.getGroupsForUser(currentAccount().id)
+  : [];
+
+const canAccessGroup = (groupId) =>
+  Boolean(currentAccount() && repository.isUserInGroup(currentAccount().id, groupId));
+
+const selectAccessibleGroup = (groupId) => {
+  if (!canAccessGroup(groupId)) {
+    showToast("Essa patota não está vinculada ao seu usuário.");
+    return false;
+  }
+
+  repository.setCurrentGroup(groupId);
+  return true;
+};
 
 const showPage = (name) => {
   elements.pages.forEach((page) => page.classList.toggle("is-hidden", page.dataset.pageSection !== name));
@@ -95,29 +110,63 @@ const renderMyGroups = () => {
     const members = repository.getPlayersByGroup(group.id).length;
     const isOwner = group.ownerUserId === currentAccount()?.id;
     const status = attendance?.status === "present" ? "Confirmado hoje" : attendance?.status === "absent" ? "Ausente hoje" : "Presença pendente";
-    return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span>${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ''}</div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__meta"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+    return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ''}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
   }).join("");
 };
 
 const renderGroupDetail = () => {
   const group = repository.getGroupById(repository.getCurrentGroupId());
-  if (!group) { showPage("groups"); return; }
+  const account = currentAccount();
+
+  if (!group || !account || !repository.isUserInGroup(account.id, group.id)) {
+    repository.setCurrentGroup(null);
+    showPage("groups");
+    return;
+  }
+
   const players = repository.getPlayersByGroup(group.id);
   const attendances = repository.getAttendance(group.id, today());
-  const presentIds = new Set(attendances.filter((item) => item.status === "present").map((item) => item.playerId));
+  const presentIds = new Set(
+    attendances
+      .filter((item) => item.status === "present")
+      .map((item) => item.playerId),
+  );
+  const isOwner = repository.isGroupOrganizer(group.id, account.id);
+  const ownerPlayerId = repository.getAccountById(group.ownerUserId)?.playerId;
+
   elements.detailGroupName.textContent = group.name;
   elements.detailGroupSchedule.textContent = `Encontro das ${scheduleLabel(group)}.`;
   elements.detailMemberCount.textContent = players.length;
   elements.detailPresentCount.textContent = presentIds.size;
   elements.detailTime.textContent = group.startTime ?? "--:--";
-  elements.detailMembers.innerHTML = players.length ? players.map((player) => `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) ? "✅ Confirmado hoje" : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span></div>`).join("") : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
+  elements.detailMembers.innerHTML = players.length
+    ? players
+        .map(
+          (player) =>
+            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) ? "✅ Confirmado hoje" : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
+        )
+        .join("")
+    : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
 
-  const isOwner = !group.ownerUserId || group.ownerUserId === currentAccount()?.id;
+  elements.detailManagementPanel.classList.toggle("is-hidden", !isOwner);
+
+  if (!isOwner) {
+    elements.detailAddPlayerError.textContent = "";
+    return;
+  }
+
   const available = repository.getPlayersNotInGroup(group.id);
-  elements.detailAddPlayerSelect.disabled = !isOwner || !available.length;
-  elements.detailAddPlayerButton.disabled = !isOwner || !available.length;
-  elements.detailAddPlayerSelect.innerHTML = available.length ? available.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel(player.side)}</option>`).join("") : '<option value="">Nenhum atleta disponível</option>';
-  elements.detailAddPlayerError.textContent = isOwner ? "" : "Somente o organizador pode adicionar atletas.";
+  elements.detailAddPlayerSelect.disabled = !available.length;
+  elements.detailAddPlayerButton.disabled = !available.length;
+  elements.detailAddPlayerSelect.innerHTML = available.length
+    ? available
+        .map(
+          (player) =>
+            `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel(player.side)}</option>`,
+        )
+        .join("")
+    : '<option value="">Nenhum atleta disponível</option>';
+  elements.detailAddPlayerError.textContent = "";
 };
 
 const renderAttendance = () => {
@@ -234,15 +283,69 @@ elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.class
 
 // Groups
 elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
-elements.myGroupsList.addEventListener("click", (event) => { const open = event.target.closest("[data-open-group]"); const presence = event.target.closest("[data-presence-group]"); const groupId = open?.dataset.openGroup ?? presence?.dataset.presenceGroup; if (!groupId) return; repository.setCurrentGroup(groupId); if (open) showPage("group-detail"); else showPage("attendance"); });
-elements.detailAddPlayerButton.addEventListener("click", () => { elements.detailAddPlayerError.textContent = ""; const groupId = repository.getCurrentGroupId(); const playerId = elements.detailAddPlayerSelect.value; if (!playerId) return; try { repository.addPlayerToGroup(playerId, groupId); renderGroupDetail(); renderMyGroups(); showToast("Atleta adicionado à patota."); } catch (error) { elements.detailAddPlayerError.textContent = error.message; } });
+elements.myGroupsList.addEventListener("click", (event) => {
+  const open = event.target.closest("[data-open-group]");
+  const presence = event.target.closest("[data-presence-group]");
+  const groupId = open?.dataset.openGroup ?? presence?.dataset.presenceGroup;
+
+  if (!groupId || !selectAccessibleGroup(groupId)) return;
+
+  if (open) showPage("group-detail");
+  else showPage("attendance");
+});
+
+elements.detailAddPlayerButton.addEventListener("click", () => {
+  elements.detailAddPlayerError.textContent = "";
+  const groupId = repository.getCurrentGroupId();
+  const playerId = elements.detailAddPlayerSelect.value;
+
+  if (!playerId) return;
+
+  try {
+    repository.addPlayerToGroup(playerId, groupId, currentAccount()?.id);
+    renderGroupDetail();
+    renderMyGroups();
+    showToast("Atleta adicionado à patota.");
+  } catch (error) {
+    elements.detailAddPlayerError.textContent = error.message;
+  }
+});
+
+elements.detailMembers.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-player]");
+  if (!button) return;
+
+  const groupId = repository.getCurrentGroupId();
+  const player = repository.getPlayerById(button.dataset.removePlayer);
+
+  if (!player) return;
+
+  if (!window.confirm(`Remover ${player.name} desta patota?`)) return;
+
+  try {
+    repository.removePlayerFromGroup(
+      player.id,
+      groupId,
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast(`${player.name} foi removido da patota.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 
 // Attendance
 elements.attendanceList.addEventListener("click", (event) => { const button = event.target.closest("[data-attendance]"); if (!button) return; repository.setAttendance({ groupId: button.dataset.groupId, playerId: currentPlayer().id, date: today(), status: button.dataset.attendance, barbecue: false }); renderAttendance(); renderMyGroups(); showToast(button.dataset.attendance === "present" ? "Presença confirmada: +1 ponto." : "Ausência registrada."); });
 elements.attendanceList.addEventListener("change", (event) => { const checkbox = event.target.closest("[data-barbecue]"); if (!checkbox) return; const groupId = checkbox.dataset.barbecue; repository.setAttendance({ groupId, playerId: currentPlayer().id, date: today(), status: "present", barbecue: checkbox.checked }); renderAttendance(); showToast(checkbox.checked ? "Churrasco marcado: +5 pontos." : "Churrasco desmarcado."); });
 
 // Draw
-elements.drawGroupSelect.addEventListener("change", () => { repository.setCurrentGroup(elements.drawGroupSelect.value); renderDraw(); });
+elements.drawGroupSelect.addEventListener("change", () => {
+  if (selectAccessibleGroup(elements.drawGroupSelect.value)) {
+    renderDraw();
+  }
+});
 elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
 elements.drawForm.addEventListener("submit", (event) => { event.preventDefault(); handleDraw(); });
 elements.redrawButton.addEventListener("click", handleDraw);
