@@ -85,3 +85,110 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
     margin-left: 50px;
   }
 }
+
+
+/* Churrasco */
+.barbecue-page-grid {
+  align-items: start;
+}
+
+.barbecue-list,
+.barbecue-organizer-events {
+  display: grid;
+  gap: 12px;
+}
+
+.barbecue-card,
+.barbecue-admin-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, .025);
+  padding: 16px;
+}
+
+.barbecue-card__head,
+.barbecue-admin-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.barbecue-card h3,
+.organizer-events-heading h3 {
+  margin: 4px 0 0;
+}
+
+.barbecue-card p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.barbecue-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.barbecue-actions .is-selected {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.barbecue-locked {
+  margin-top: 14px;
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.organizer-events-heading {
+  margin: 26px 0 12px;
+}
+
+.barbecue-admin-card__head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.barbecue-admin-card__head small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.barbecue-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.barbecue-person {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 207, 51, .16);
+  border-radius: 999px;
+  background: rgba(255, 207, 51, .055);
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: .74rem;
+}
+
+.empty-state--compact {
+  min-height: 110px;
+}
+
+@media (max-width: 760px) {
+  .barbecue-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .barbecue-card__head,
+  .barbecue-admin-card__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
