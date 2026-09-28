@@ -6,6 +6,9 @@ export class Group {
 
     this.id = options.id ?? crypto.randomUUID();
     this.name = name.trim();
+    this.startTime = options.startTime ?? null;
+    this.endTime = options.endTime ?? null;
+    this.ownerUserId = options.ownerUserId ?? null;
     this.active = options.active ?? true;
     this.createdAt = options.createdAt ?? new Date().toISOString();
 
