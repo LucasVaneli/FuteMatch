@@ -12,6 +12,8 @@ const initialState = () => ({
   sessions: [],
   attendances: [],
   pairResults: [],
+  barbecueEvents: [],
+  barbecueConfirmations: [],
   currentGroupId: null,
   currentUserId: null,
 });
@@ -27,6 +29,17 @@ const matchesActiveStatus = (item, active) =>
   active === null ? true : (item.active !== false) === active;
 
 const isValidTime = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value ?? "");
+const isValidDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
+const dateKey = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const daysBetween = (fromDate, toDate) => {
+  const [fromYear, fromMonth, fromDay] = fromDate.split("-").map(Number);
+  const [toYear, toMonth, toDay] = toDate.split("-").map(Number);
+  const from = Date.UTC(fromYear, fromMonth - 1, fromDay);
+  const to = Date.UTC(toYear, toMonth - 1, toDay);
+  return Math.round((to - from) / 86400000);
+};
 
 export class FuteMatchRepository {
   constructor(storage = globalThis.localStorage) {
@@ -362,6 +375,16 @@ export class FuteMatchRepository {
     return this.getGroupsByPlayer(account.playerId, { includeInactive });
   }
 
+  getGroupsOrganizedByUser(userId, { includeInactive = false } = {}) {
+    return this.getState().groups
+      .filter(
+        (group) =>
+          group.ownerUserId === userId &&
+          (includeInactive || group.active !== false),
+      )
+      .map(Group.fromJSON);
+  }
+
   isUserInGroup(userId, groupId) {
     const account = this.getAccountById(userId);
     return Boolean(account && this.isPlayerInGroup(account.playerId, groupId));
@@ -456,6 +479,168 @@ export class FuteMatchRepository {
     this.#save(state);
   }
 
+  scheduleBarbecue(groupId, date, actorUserId) {
+    const state = this.getState();
+    const group = this.#assertGroupOrganizer(state, groupId, actorUserId);
+
+    if (!isValidDate(date)) {
+      throw new Error("Informe uma data válida para o churrasco.");
+    }
+
+    if (date < dateKey()) {
+      throw new Error("Não é possível agendar um churrasco em uma data passada.");
+    }
+
+    const existing = state.barbecueEvents.find(
+      (event) =>
+        event.groupId === group.id &&
+        event.date === date &&
+        event.active !== false,
+    );
+
+    if (existing) {
+      throw new Error("Já existe um churrasco agendado nesta data.");
+    }
+
+    const barbecueEvent = {
+      id: crypto.randomUUID(),
+      groupId: group.id,
+      date,
+      active: true,
+      createdAt: new Date().toISOString(),
+      createdBy: actorUserId,
+    };
+
+    state.barbecueEvents.push(barbecueEvent);
+    this.#save(state);
+    return { ...barbecueEvent };
+  }
+
+  cancelBarbecue(eventId, actorUserId) {
+    const state = this.getState();
+    const event = state.barbecueEvents.find((item) => item.id === eventId);
+
+    if (!event) {
+      throw new Error("Churrasco não encontrado.");
+    }
+
+    this.#assertGroupOrganizer(state, event.groupId, actorUserId);
+    event.active = false;
+    event.cancelledAt = new Date().toISOString();
+    this.#save(state);
+  }
+
+  getBarbecueEventsByGroup(groupId, { includePast = false } = {}) {
+    const currentDate = dateKey();
+
+    return this.getState().barbecueEvents
+      .filter(
+        (event) =>
+          event.groupId === groupId &&
+          event.active !== false &&
+          (includePast || event.date >= currentDate),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((event) => ({ ...event }));
+  }
+
+  getBarbecueEventsForUser(userId, { includePast = false } = {}) {
+    const groupIds = new Set(
+      this.getGroupsForUser(userId).map((group) => group.id),
+    );
+    const currentDate = dateKey();
+
+    return this.getState().barbecueEvents
+      .filter(
+        (event) =>
+          groupIds.has(event.groupId) &&
+          event.active !== false &&
+          (includePast || event.date >= currentDate),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((event) => ({ ...event }));
+  }
+
+  getBarbecueEventById(eventId) {
+    const event = this.getState().barbecueEvents.find(
+      (item) => item.id === eventId,
+    );
+    return event ? { ...event } : null;
+  }
+
+  setBarbecueConfirmation({
+    eventId,
+    playerId,
+    status,
+    currentDate = dateKey(),
+  }) {
+    const state = this.getState();
+    const event = state.barbecueEvents.find(
+      (item) => item.id === eventId && item.active !== false,
+    );
+
+    if (!event) {
+      throw new Error("Churrasco não encontrado.");
+    }
+
+    if (!this.isPlayerInGroup(playerId, event.groupId)) {
+      throw new Error("O atleta não pertence a esta patota.");
+    }
+
+    if (!["going", "not_going"].includes(status)) {
+      throw new Error("Resposta de churrasco inválida.");
+    }
+
+    const daysUntilEvent = daysBetween(currentDate, event.date);
+
+    if (daysUntilEvent < 0) {
+      throw new Error("O prazo de confirmação deste churrasco já terminou.");
+    }
+
+    if (daysUntilEvent > 7) {
+      throw new Error("A confirmação abre 7 dias antes do churrasco.");
+    }
+
+    let confirmation = state.barbecueConfirmations.find(
+      (item) =>
+        item.eventId === event.id &&
+        item.playerId === playerId,
+    );
+
+    if (confirmation) {
+      confirmation.status = status;
+      confirmation.updatedAt = new Date().toISOString();
+    } else {
+      confirmation = {
+        id: crypto.randomUUID(),
+        eventId: event.id,
+        playerId,
+        status,
+        updatedAt: new Date().toISOString(),
+      };
+      state.barbecueConfirmations.push(confirmation);
+    }
+
+    this.#save(state);
+    return { ...confirmation };
+  }
+
+  getBarbecueConfirmations(eventId) {
+    return this.getState().barbecueConfirmations
+      .filter((item) => item.eventId === eventId)
+      .map((item) => ({ ...item }));
+  }
+
+  getPlayerBarbecueConfirmation(eventId, playerId) {
+    const confirmation = this.getState().barbecueConfirmations.find(
+      (item) =>
+        item.eventId === eventId &&
+        item.playerId === playerId,
+    );
+
+    return confirmation ? { ...confirmation } : null;
+  }
+
   #getOrCreateSessionInState(state, groupId, date) {
     let session = state.sessions.find(
       (item) => item.groupId === groupId && item.date === date,
@@ -482,7 +667,7 @@ export class FuteMatchRepository {
     return session ? { ...session } : null;
   }
 
-  setAttendance({ groupId, playerId, date, status, barbecue = false }) {
+  setAttendance({ groupId, playerId, date, status }) {
     if (!groupId || !playerId || !date) {
       throw new Error("Dados de presença incompletos.");
     }
@@ -501,11 +686,8 @@ export class FuteMatchRepository {
       (item) => item.sessionId === session.id && item.playerId === playerId,
     );
 
-    const safeBarbecue = status === "present" ? Boolean(barbecue) : false;
-
     if (attendance) {
       attendance.status = status;
-      attendance.barbecue = safeBarbecue;
       attendance.updatedAt = new Date().toISOString();
     } else {
       attendance = {
@@ -513,7 +695,6 @@ export class FuteMatchRepository {
         sessionId: session.id,
         playerId,
         status,
-        barbecue: safeBarbecue,
         updatedAt: new Date().toISOString(),
       };
       state.attendances.push(attendance);
@@ -647,12 +828,22 @@ export class FuteMatchRepository {
       .map((item) => ({ ...item }));
   }
 
-  getRankingData(groupId) {
+  getRankingData(groupId, { asOfDate = dateKey() } = {}) {
     const state = this.getState();
     const sessionIds = new Set(
       state.sessions
         .filter((session) => session.groupId === groupId)
         .map((session) => session.id),
+    );
+    const eligibleBarbecueEventIds = new Set(
+      state.barbecueEvents
+        .filter(
+          (event) =>
+            event.groupId === groupId &&
+            event.active !== false &&
+            event.date <= asOfDate,
+        )
+        .map((event) => event.id),
     );
 
     return {
@@ -662,6 +853,11 @@ export class FuteMatchRepository {
         .map((item) => ({ ...item })),
       pairResults: state.pairResults
         .filter((result) => sessionIds.has(result.sessionId))
+        .map((item) => ({ ...item })),
+      barbecueConfirmations: state.barbecueConfirmations
+        .filter((confirmation) =>
+          eligibleBarbecueEventIds.has(confirmation.eventId),
+        )
         .map((item) => ({ ...item })),
     };
   }
