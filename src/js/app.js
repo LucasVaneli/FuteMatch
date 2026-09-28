@@ -803,18 +803,20 @@ if (authService.getCurrentAccount()) {
   enterAuth();
 }
 
-supabase.auth.onAuthStateChange(async (event, session) => {
-  if (event === "SIGNED_IN" && session?.user) {
-    repository.setAuthenticatedUser(session.user);
-    await repository.sync();
+supabase.auth.onAuthStateChange((event, session) => {
+  setTimeout(async () => {
+    if (event === "SIGNED_IN" && session?.user) {
+      repository.setAuthenticatedUser(session.user);
+      await repository.sync();
 
-    if (elements.app.classList.contains("is-hidden")) {
-      enterApp();
+      if (elements.app.classList.contains("is-hidden")) {
+        enterApp();
+      }
     }
-  }
 
-  if (event === "SIGNED_OUT") {
-    repository.setAuthenticatedUser(null);
-    enterAuth();
-  }
+    if (event === "SIGNED_OUT") {
+      repository.setAuthenticatedUser(null);
+      enterAuth();
+    }
+  }, 0);
 });
