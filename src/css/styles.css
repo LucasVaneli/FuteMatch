@@ -42,3 +42,175 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
 @media(max-width:980px){.app-layout{grid-template-columns:1fr}.sidebar{position:fixed;inset:0 auto 0 0;z-index:50;width:270px;transform:translateX(-105%);transition:.2s;box-shadow:var(--shadow)}.sidebar.is-open{transform:translateX(0)}.mobile-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}.workspace{padding:22px}.content-grid,.content-grid--results{grid-template-columns:1fr}}
 @media(max-width:760px){.auth-screen{grid-template-columns:1fr;gap:24px;padding:28px 0}.auth-brand h1{font-size:clamp(3rem,16vw,4.7rem)}.group-grid,.attendance-grid,.ranking-grid,.pairs-grid{grid-template-columns:1fr}.players-grid{grid-template-columns:1fr}.versus{margin:-3px auto}.page-heading,.page-heading--with-action{flex-direction:column;align-items:stretch}.heading-controls{display:grid}.page-select,.page-date{min-width:0}.stats-row{grid-template-columns:1fr}.selection-summary{flex-direction:column;align-items:stretch}.selection-summary .button{width:100%}}
 @media(max-width:520px){.workspace{padding:16px 12px 32px}.auth-card{padding:17px}.form-grid{grid-template-columns:1fr}.group-card__actions,.attendance-actions{grid-template-columns:1fr;display:grid}.inline-form{grid-template-columns:1fr}.pair-result-row{grid-template-columns:1fr}.win-control{justify-content:space-between}.pair-card{grid-template-columns:1fr;gap:8px}.pair-player--right{text-align:left}}
+
+/* Patota card: indicadores no canto superior direito */
+.group-card__top {
+  gap: 16px;
+  min-height: 58px;
+}
+.group-card__badges {
+  display: flex;
+  max-width: 78%;
+  margin-left: auto;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-card__status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.member-remove-button {
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
+@media (max-width: 520px) {
+  .group-card__badges {
+    max-width: calc(100% - 48px);
+  }
+
+  .group-card__status {
+    gap: 6px;
+  }
+
+  .member-row {
+    flex-wrap: wrap;
+  }
+
+  .member-remove-button {
+    width: 100%;
+    margin-left: 50px;
+  }
+}
+
+
+/* Churrasco */
+.barbecue-page-grid {
+  align-items: start;
+}
+
+.barbecue-list,
+.barbecue-organizer-events {
+  display: grid;
+  gap: 12px;
+}
+
+.barbecue-card,
+.barbecue-admin-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, .025);
+  padding: 16px;
+}
+
+.barbecue-card__head,
+.barbecue-admin-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.barbecue-card h3,
+.organizer-events-heading h3 {
+  margin: 4px 0 0;
+}
+
+.barbecue-card p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.barbecue-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.barbecue-actions .is-selected {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.barbecue-locked {
+  margin-top: 14px;
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.organizer-events-heading {
+  margin: 26px 0 12px;
+}
+
+.barbecue-admin-card__head > div {
+  display: grid;
+  gap: 4px;
+}
+
+.barbecue-admin-card__head small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.barbecue-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.barbecue-person {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 207, 51, .16);
+  border-radius: 999px;
+  background: rgba(255, 207, 51, .055);
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: .74rem;
+}
+
+.empty-state--compact {
+  min-height: 110px;
+}
+
+@media (max-width: 760px) {
+  .barbecue-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .barbecue-card__head,
+  .barbecue-admin-card__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+
+/* Agenda semanal e janela de presença */
+.management-block {
+  margin-top: 0;
+}
+
+.management-divider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--border);
+}
+
+.attendance-locked {
+  margin-top: 16px;
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .02);
+  font-size: .78rem;
+}

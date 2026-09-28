@@ -1,3 +1,4 @@
+import { GROUP_WEEKDAY_LABEL } from "./domain/Group.js";
 import { PLAYER_SIDE } from "./domain/Player.js";
 import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
@@ -18,9 +19,10 @@ const elements = {
   registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"),
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
-  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
-  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
+  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
+  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailScheduleForm: $("#detail-schedule-form"), detailWeekday: $("#detail-weekday"), detailStartTime: $("#detail-start-time"), detailEndTime: $("#detail-end-time"), detailScheduleError: $("#detail-schedule-error"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
+  barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
   resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
   rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
@@ -34,8 +36,27 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 const formatDate = (value) => new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00`));
-const sideLabel = (side) => side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
-const scheduleLabel = (group) => group.startTime && group.endTime ? `${group.startTime} às ${group.endTime}` : "Horário não definido";
+const daysUntil = (value) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const [currentYear, currentMonth, currentDay] = today().split("-").map(Number);
+  return Math.round(
+    (Date.UTC(year, month - 1, day) -
+      Date.UTC(currentYear, currentMonth - 1, currentDay)) /
+      86400000,
+  );
+};
+const sideLabel = (side) =>
+  side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
+const weekdayLabel = (weekday) =>
+  GROUP_WEEKDAY_LABEL[Number(weekday)] ?? "Dia não definido";
+const scheduleLabel = (group) => {
+  const day = weekdayLabel(group.weekday);
+  const time =
+    group.startTime && group.endTime
+      ? `${group.startTime} às ${group.endTime}`
+      : "Horário não definido";
+  return `${day} • ${time}`;
+};
 
 const showToast = (message) => {
   clearTimeout(toastTimer); elements.toast.textContent = message; elements.toast.classList.add("is-visible");
@@ -44,7 +65,22 @@ const showToast = (message) => {
 
 const currentPlayer = () => repository.getCurrentPlayer();
 const currentAccount = () => repository.getCurrentAccount();
-const myGroups = () => currentPlayer() ? repository.getGroupsByPlayer(currentPlayer().id) : [];
+const myGroups = () => currentAccount()
+  ? repository.getGroupsForUser(currentAccount().id)
+  : [];
+
+const canAccessGroup = (groupId) =>
+  Boolean(currentAccount() && repository.isUserInGroup(currentAccount().id, groupId));
+
+const selectAccessibleGroup = (groupId) => {
+  if (!canAccessGroup(groupId)) {
+    showToast("Essa patota não está vinculada ao seu usuário.");
+    return false;
+  }
+
+  repository.setCurrentGroup(groupId);
+  return true;
+};
 
 const showPage = (name) => {
   elements.pages.forEach((page) => page.classList.toggle("is-hidden", page.dataset.pageSection !== name));
@@ -53,6 +89,7 @@ const showPage = (name) => {
   if (name === "groups") renderMyGroups();
   if (name === "group-detail") renderGroupDetail();
   if (name === "attendance") renderAttendance();
+  if (name === "barbecue") renderBarbecue();
   if (name === "draw") renderDraw();
   if (name === "results") renderResults();
   if (name === "ranking") renderRanking();
@@ -90,50 +127,252 @@ const renderMyGroups = () => {
 
   const player = currentPlayer();
   const date = today();
-  elements.myGroupsList.innerHTML = groups.map((group) => {
-    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
-    const members = repository.getPlayersByGroup(group.id).length;
-    const isOwner = group.ownerUserId === currentAccount()?.id;
-    const status = attendance?.status === "present" ? "Confirmado hoje" : attendance?.status === "absent" ? "Ausente hoje" : "Presença pendente";
-    return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span>${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ''}</div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__meta"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
-  }).join("");
+
+  elements.myGroupsList.innerHTML = groups
+    .map((group) => {
+      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+      const attendance = attendanceWindow.targetDate
+        ? repository.getPlayerAttendance(
+            group.id,
+            player.id,
+            attendanceWindow.targetDate,
+          )
+        : null;
+      const members = repository.getPlayersByGroup(group.id).length;
+      const isOwner = group.ownerUserId === currentAccount()?.id;
+
+      let status = "Dia não definido";
+      if (attendanceWindow.available) {
+        if (!attendanceWindow.isOpen) {
+          status = `Votação abre ${formatDate(attendanceWindow.opensOn)}`;
+        } else if (attendance?.status === "present") {
+          status = "Presença confirmada";
+        } else if (attendance?.status === "absent") {
+          status = "Ausência informada";
+        } else {
+          status = "Presença pendente";
+        }
+      }
+
+      return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ""}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+    })
+    .join("");
 };
 
 const renderGroupDetail = () => {
   const group = repository.getGroupById(repository.getCurrentGroupId());
-  if (!group) { showPage("groups"); return; }
+  const account = currentAccount();
+
+  if (!group || !account || !repository.isUserInGroup(account.id, group.id)) {
+    repository.setCurrentGroup(null);
+    showPage("groups");
+    return;
+  }
+
   const players = repository.getPlayersByGroup(group.id);
-  const attendances = repository.getAttendance(group.id, today());
-  const presentIds = new Set(attendances.filter((item) => item.status === "present").map((item) => item.playerId));
+  const attendanceWindow = repository.getAttendanceWindow(group.id, today());
+  const attendances = attendanceWindow.targetDate
+    ? repository.getAttendance(group.id, attendanceWindow.targetDate)
+    : [];
+  const presentIds = new Set(
+    attendances
+      .filter((item) => item.status === "present")
+      .map((item) => item.playerId),
+  );
+  const isOwner = repository.isGroupOrganizer(group.id, account.id);
+  const ownerPlayerId = repository.getAccountById(group.ownerUserId)?.playerId;
+
   elements.detailGroupName.textContent = group.name;
-  elements.detailGroupSchedule.textContent = `Encontro das ${scheduleLabel(group)}.`;
+  elements.detailGroupSchedule.textContent = `Encontro: ${scheduleLabel(group)}.`;
   elements.detailMemberCount.textContent = players.length;
   elements.detailPresentCount.textContent = presentIds.size;
   elements.detailTime.textContent = group.startTime ?? "--:--";
-  elements.detailMembers.innerHTML = players.length ? players.map((player) => `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) ? "✅ Confirmado hoje" : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span></div>`).join("") : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
+  elements.detailMembers.innerHTML = players.length
+    ? players
+        .map(
+          (player) =>
+            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
+        )
+        .join("")
+    : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
 
-  const isOwner = !group.ownerUserId || group.ownerUserId === currentAccount()?.id;
+  elements.detailManagementPanel.classList.toggle("is-hidden", !isOwner);
+
+  if (!isOwner) {
+    elements.detailAddPlayerError.textContent = "";
+    elements.detailScheduleError.textContent = "";
+    return;
+  }
+
+  elements.detailWeekday.value = group.weekday ?? "";
+  elements.detailStartTime.value = group.startTime ?? "";
+  elements.detailEndTime.value = group.endTime ?? "";
+  elements.detailScheduleError.textContent = "";
+
   const available = repository.getPlayersNotInGroup(group.id);
-  elements.detailAddPlayerSelect.disabled = !isOwner || !available.length;
-  elements.detailAddPlayerButton.disabled = !isOwner || !available.length;
-  elements.detailAddPlayerSelect.innerHTML = available.length ? available.map((player) => `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel(player.side)}</option>`).join("") : '<option value="">Nenhum atleta disponível</option>';
-  elements.detailAddPlayerError.textContent = isOwner ? "" : "Somente o organizador pode adicionar atletas.";
+  elements.detailAddPlayerSelect.disabled = !available.length;
+  elements.detailAddPlayerButton.disabled = !available.length;
+  elements.detailAddPlayerSelect.innerHTML = available.length
+    ? available
+        .map(
+          (player) =>
+            `<option value="${player.id}">${escapeHtml(player.name)} — ${sideLabel(player.side)}</option>`,
+        )
+        .join("")
+    : '<option value="">Nenhum atleta disponível</option>';
+  elements.detailAddPlayerError.textContent = "";
 };
 
 const renderAttendance = () => {
   const groups = myGroups();
   const player = currentPlayer();
   const date = today();
-  elements.attendanceDateLabel.textContent = `Hoje • ${formatDate(date)}`;
-  if (!groups.length) { elements.attendanceList.innerHTML = '<div class="empty-state"><strong>Sem patotas</strong><span>Entre em uma patota para confirmar presença.</span></div>'; return; }
-  elements.attendanceList.innerHTML = groups.map((group) => {
-    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
-    const present = attendance?.status === "present";
-    const absent = attendance?.status === "absent";
-    const statusClass = present ? "status-text--present" : absent ? "status-text--absent" : "";
-    const statusText = present ? "✓ Presença confirmada" : absent ? "Ausência informada" : "Ainda não respondeu";
-    return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirmar presença soma <strong>+1 ponto</strong> no ranking desta patota.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}">✕ Não vou</button></div><label class="barbecue-toggle"><input type="checkbox" data-barbecue="${group.id}" ${attendance?.barbecue ? "checked" : ""} ${present ? "" : "disabled"}/><span><strong>🔥 Vou ficar no churrasco</strong><small>Vale +5 pontos. Disponível após confirmar presença.</small></span></label></article>`;
-  }).join("");
+
+  elements.attendanceDateLabel.textContent = "Janela • 2 dias antes";
+
+  if (!groups.length) {
+    elements.attendanceList.innerHTML =
+      '<div class="empty-state"><strong>Sem patotas</strong><span>Entre em uma patota para confirmar presença.</span></div>';
+    return;
+  }
+
+  elements.attendanceList.innerHTML = groups
+    .map((group) => {
+      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+
+      if (!attendanceWindow.available) {
+        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text">Configuração pendente</span></div><p>O organizador precisa definir o dia da semana desta patota antes de abrir a votação de presença.</p><div class="attendance-locked">Dia da semana ainda não definido.</div></article>`;
+      }
+
+      const attendance = repository.getPlayerAttendance(
+        group.id,
+        player.id,
+        attendanceWindow.targetDate,
+      );
+      const present = attendance?.status === "present";
+      const absent = attendance?.status === "absent";
+      const statusClass = present
+        ? "status-text--present"
+        : absent
+          ? "status-text--absent"
+          : "";
+      const statusText = attendanceWindow.isOpen
+        ? present
+          ? "✓ Presença confirmada"
+          : absent
+            ? "Ausência informada"
+            : "Votação aberta"
+        : "Votação fechada";
+
+      const occurrenceText =
+        attendanceWindow.daysUntil === 0
+          ? "Hoje"
+          : attendanceWindow.daysUntil === 1
+            ? "Amanhã"
+            : `${weekdayLabel(group.weekday)}, ${formatDate(attendanceWindow.targetDate)}`;
+
+      if (!attendanceWindow.isOpen) {
+        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text">${statusText}</span></div><p>A próxima patota é em <strong>${formatDate(attendanceWindow.targetDate)}</strong>. A votação abre em <strong>${formatDate(attendanceWindow.opensOn)}</strong>, dois dias antes.</p><div class="attendance-locked">🔒 Aguarde a abertura da votação.</div></article>`;
+      }
+
+      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirme sua presença para <strong>${formatDate(attendanceWindow.targetDate)}</strong>. Participar vale <strong>+2 pontos</strong>.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✕ Não vou</button></div></article>`;
+    })
+    .join("");
+};
+
+const renderBarbecue = () => {
+  const account = currentAccount();
+  const player = currentPlayer();
+
+  if (!account || !player) return;
+
+  const events = repository.getBarbecueEventsForUser(account.id);
+  const organizerGroups = repository.getGroupsOrganizedByUser(account.id);
+
+  elements.barbecueDate.min = today();
+  if (!elements.barbecueDate.value) {
+    elements.barbecueDate.value = today();
+  }
+
+  if (!events.length) {
+    elements.barbecueList.innerHTML =
+      '<div class="empty-state"><strong>Nenhum churrasco agendado</strong><span>Quando um organizador marcar uma data, ela aparecerá aqui.</span></div>';
+  } else {
+    elements.barbecueList.innerHTML = events
+      .map((event) => {
+        const group = repository.getGroupById(event.groupId);
+        const confirmation = repository.getPlayerBarbecueConfirmation(
+          event.id,
+          player.id,
+        );
+        const remainingDays = daysUntil(event.date);
+        const confirmationOpen =
+          remainingDays >= 0 && remainingDays <= 7;
+        const going = confirmation?.status === "going";
+        const notGoing = confirmation?.status === "not_going";
+
+        const availabilityText = confirmationOpen
+          ? remainingDays === 0
+            ? "É hoje"
+            : remainingDays === 1
+              ? "É amanhã"
+              : `Faltam ${remainingDays} dias`
+          : `Confirmação abre em ${remainingDays - 7} dia(s)`;
+
+        return `<article class="barbecue-card"><div class="barbecue-card__head"><div><span class="section-kicker">${escapeHtml(group?.name ?? "Patota")}</span><h3>🔥 ${formatDate(event.date)}</h3></div><span class="meta-chip">${availabilityText}</span></div><p>Ficar no churrasco vale <strong>+4 pontos</strong>.</p>${
+          confirmationOpen
+            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button button--ghost ${notGoing ? "is-selected" : ""}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
+            : `<div class="barbecue-locked">A confirmação ficará disponível 7 dias antes.</div>`
+        }</article>`;
+      })
+      .join("");
+  }
+
+  elements.barbecueOrganizerPanel.classList.toggle(
+    "is-hidden",
+    !organizerGroups.length,
+  );
+
+  if (!organizerGroups.length) return;
+
+  groupOptions(
+    elements.barbecueGroupSelect,
+    organizerGroups,
+    elements.barbecueGroupSelect.value,
+  );
+
+  const organizerEvents =
+    repository.getBarbecueEventsOrganizedByUser(account.id);
+
+  if (!organizerEvents.length) {
+    elements.barbecueOrganizerEvents.innerHTML =
+      '<div class="empty-state empty-state--compact"><span>Você ainda não agendou nenhum churrasco.</span></div>';
+    return;
+  }
+
+  elements.barbecueOrganizerEvents.innerHTML = organizerEvents
+    .map((event) => {
+      const group = repository.getGroupById(event.groupId);
+      const confirmations = repository.getBarbecueConfirmations(event.id);
+      const goingIds = confirmations
+        .filter((confirmation) => confirmation.status === "going")
+        .map((confirmation) => confirmation.playerId);
+      const goingPlayers = goingIds
+        .map((playerId) => repository.getPlayerById(playerId))
+        .filter(Boolean);
+
+      const confirmedList = goingPlayers.length
+        ? goingPlayers
+            .map(
+              (confirmedPlayer) =>
+                `<span class="barbecue-person">🔥 ${escapeHtml(confirmedPlayer.name)}</span>`,
+            )
+            .join("")
+        : '<span class="muted">Ninguém confirmou ainda.</span>';
+
+      return `<article class="barbecue-admin-card"><div class="barbecue-admin-card__head"><div><strong>${escapeHtml(group?.name ?? "Patota")}</strong><small>${formatDate(event.date)} • ${goingPlayers.length} confirmado(s)</small></div><button class="button button--danger button--small" type="button" data-cancel-barbecue="${event.id}">Cancelar</button></div><div class="barbecue-people">${confirmedList}</div></article>`;
+    })
+    .join("");
 };
 
 const playerOption = (player, checked) => `<label class="player-select-card"><input type="checkbox" data-draw-player="${player.id}" data-player-side="${player.side}" ${checked ? "checked" : ""}/><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><span class="player-select-card__text"><strong>${escapeHtml(player.name)}</strong><small>${sideLabel(player.side)}</small></span></label>`;
@@ -159,9 +398,26 @@ const renderDraw = () => {
   const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
   if (left.length < 2 || right.length < 2) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = `<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>`; return; }
   elements.drawEmpty.classList.add("is-hidden"); elements.drawContent.classList.remove("is-hidden");
-  const attendance = repository.getAttendance(selectedId, today());
+  const attendanceWindow = repository.getAttendanceWindow(selectedId, today());
+
+  if (!attendanceWindow.available) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Dia da semana não definido</strong><span>O organizador precisa configurar o dia da patota antes do sorteio.</span>';
+    return;
+  }
+
+  const attendance = repository.getAttendance(
+    selectedId,
+    attendanceWindow.targetDate,
+  );
   const hasResponses = attendance.length > 0;
-  const presentIds = new Set(attendance.filter((item) => item.status === "present").map((item) => item.playerId));
+  const presentIds = new Set(
+    attendance
+      .filter((item) => item.status === "present")
+      .map((item) => item.playerId),
+  );
   elements.leftPlayerOptions.innerHTML = left.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
   elements.rightPlayerOptions.innerHTML = right.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
   updateSelectionSummary();
@@ -180,7 +436,20 @@ const handleDraw = () => {
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
     drawView.renderPairs(pairs);
-    repository.saveDrawPairs(elements.drawGroupSelect.value, today(), pairs);
+    const attendanceWindow = repository.getAttendanceWindow(
+      elements.drawGroupSelect.value,
+      today(),
+    );
+
+    if (!attendanceWindow.available) {
+      throw new Error(attendanceWindow.reason);
+    }
+
+    repository.saveDrawPairs(
+      elements.drawGroupSelect.value,
+      attendanceWindow.targetDate,
+      pairs,
+    );
     showToast("Duplas salvas para os resultados da noite.");
   } catch (error) { drawView.showError(error.message); }
 };
@@ -233,16 +502,170 @@ elements.goToButtons.forEach((button) => button.addEventListener("click", () => 
 elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
 // Groups
-elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
-elements.myGroupsList.addEventListener("click", (event) => { const open = event.target.closest("[data-open-group]"); const presence = event.target.closest("[data-presence-group]"); const groupId = open?.dataset.openGroup ?? presence?.dataset.presenceGroup; if (!groupId) return; repository.setCurrentGroup(groupId); if (open) showPage("group-detail"); else showPage("attendance"); });
-elements.detailAddPlayerButton.addEventListener("click", () => { elements.detailAddPlayerError.textContent = ""; const groupId = repository.getCurrentGroupId(); const playerId = elements.detailAddPlayerSelect.value; if (!playerId) return; try { repository.addPlayerToGroup(playerId, groupId); renderGroupDetail(); renderMyGroups(); showToast("Atleta adicionado à patota."); } catch (error) { elements.detailAddPlayerError.textContent = error.message; } });
+elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, weekday: elements.groupWeekday.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
+elements.myGroupsList.addEventListener("click", (event) => {
+  const open = event.target.closest("[data-open-group]");
+  const presence = event.target.closest("[data-presence-group]");
+  const groupId = open?.dataset.openGroup ?? presence?.dataset.presenceGroup;
+
+  if (!groupId || !selectAccessibleGroup(groupId)) return;
+
+  if (open) showPage("group-detail");
+  else showPage("attendance");
+});
+
+elements.detailScheduleForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  elements.detailScheduleError.textContent = "";
+
+  try {
+    repository.updateGroupSchedule(
+      repository.getCurrentGroupId(),
+      {
+        weekday: elements.detailWeekday.value,
+        startTime: elements.detailStartTime.value,
+        endTime: elements.detailEndTime.value,
+      },
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast("Dia e horário da patota atualizados.");
+  } catch (error) {
+    elements.detailScheduleError.textContent = error.message;
+  }
+});
+
+elements.detailAddPlayerButton.addEventListener("click", () => {
+  elements.detailAddPlayerError.textContent = "";
+  const groupId = repository.getCurrentGroupId();
+  const playerId = elements.detailAddPlayerSelect.value;
+
+  if (!playerId) return;
+
+  try {
+    repository.addPlayerToGroup(playerId, groupId, currentAccount()?.id);
+    renderGroupDetail();
+    renderMyGroups();
+    showToast("Atleta adicionado à patota.");
+  } catch (error) {
+    elements.detailAddPlayerError.textContent = error.message;
+  }
+});
+
+elements.detailMembers.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-player]");
+  if (!button) return;
+
+  const groupId = repository.getCurrentGroupId();
+  const player = repository.getPlayerById(button.dataset.removePlayer);
+
+  if (!player) return;
+
+  if (!window.confirm(`Remover ${player.name} desta patota?`)) return;
+
+  try {
+    repository.removePlayerFromGroup(
+      player.id,
+      groupId,
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast(`${player.name} foi removido da patota.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 
 // Attendance
-elements.attendanceList.addEventListener("click", (event) => { const button = event.target.closest("[data-attendance]"); if (!button) return; repository.setAttendance({ groupId: button.dataset.groupId, playerId: currentPlayer().id, date: today(), status: button.dataset.attendance, barbecue: false }); renderAttendance(); renderMyGroups(); showToast(button.dataset.attendance === "present" ? "Presença confirmada: +1 ponto." : "Ausência registrada."); });
-elements.attendanceList.addEventListener("change", (event) => { const checkbox = event.target.closest("[data-barbecue]"); if (!checkbox) return; const groupId = checkbox.dataset.barbecue; repository.setAttendance({ groupId, playerId: currentPlayer().id, date: today(), status: "present", barbecue: checkbox.checked }); renderAttendance(); showToast(checkbox.checked ? "Churrasco marcado: +5 pontos." : "Churrasco desmarcado."); });
+elements.attendanceList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-attendance]");
+  if (!button) return;
+
+  repository.setAttendance({
+    groupId: button.dataset.groupId,
+    playerId: currentPlayer().id,
+    date: button.dataset.attendanceDate,
+    status: button.dataset.attendance,
+    currentDate: today(),
+  });
+
+  renderAttendance();
+  renderMyGroups();
+  showToast(
+    button.dataset.attendance === "present"
+      ? "Presença confirmada: +2 pontos."
+      : "Ausência registrada.",
+  );
+});
+
+// Barbecue
+elements.barbecueForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  elements.barbecueError.textContent = "";
+
+  try {
+    repository.scheduleBarbecue(
+      elements.barbecueGroupSelect.value,
+      elements.barbecueDate.value,
+      currentAccount()?.id,
+    );
+    renderBarbecue();
+    showToast("Churrasco agendado. A confirmação abre 7 dias antes.");
+  } catch (error) {
+    elements.barbecueError.textContent = error.message;
+  }
+});
+
+elements.barbecueList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-barbecue-response]");
+  if (!button) return;
+
+  try {
+    repository.setBarbecueConfirmation({
+      eventId: button.dataset.barbecueEvent,
+      playerId: currentPlayer().id,
+      status: button.dataset.barbecueResponse,
+      currentDate: today(),
+    });
+    renderBarbecue();
+    showToast(
+      button.dataset.barbecueResponse === "going"
+        ? "Churrasco confirmado. Os +4 pontos entram no ranking na data do evento."
+        : "Você informou que não ficará no churrasco.",
+    );
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.barbecueOrganizerEvents.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-cancel-barbecue]");
+  if (!button) return;
+
+  if (!window.confirm("Cancelar este churrasco?")) return;
+
+  try {
+    repository.cancelBarbecue(
+      button.dataset.cancelBarbecue,
+      currentAccount()?.id,
+    );
+    renderBarbecue();
+    showToast("Churrasco cancelado.");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.barbecueGroupSelect.addEventListener("change", renderBarbecue);
 
 // Draw
-elements.drawGroupSelect.addEventListener("change", () => { repository.setCurrentGroup(elements.drawGroupSelect.value); renderDraw(); });
+elements.drawGroupSelect.addEventListener("change", () => {
+  if (selectAccessibleGroup(elements.drawGroupSelect.value)) {
+    renderDraw();
+  }
+});
 elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
 elements.drawForm.addEventListener("submit", (event) => { event.preventDefault(); handleDraw(); });
 elements.redrawButton.addEventListener("click", handleDraw);

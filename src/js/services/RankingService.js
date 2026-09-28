@@ -1,7 +1,18 @@
 import { PLAYER_SIDE } from "../domain/Player.js";
 
+export const RANKING_POINTS = Object.freeze({
+  ATTENDANCE: 2,
+  VICTORY: 1,
+  BARBECUE: 4,
+});
+
 export class RankingService {
-  static calculate({ players, attendances, pairResults }) {
+  static calculate({
+    players,
+    attendances,
+    pairResults,
+    barbecueConfirmations = [],
+  }) {
     const ranking = new Map(
       players.map((player) => [
         player.id,
@@ -23,27 +34,34 @@ export class RankingService {
       if (!item || attendance.status !== "present") return;
 
       item.nights += 1;
-      item.attendancePoints += 1;
-
-      if (attendance.barbecue) {
-        item.barbecues += 1;
-        item.barbecuePoints += 5;
-      }
+      item.attendancePoints += RANKING_POINTS.ATTENDANCE;
     });
 
     pairResults.forEach((result) => {
       const wins = Math.max(0, Number(result.wins) || 0);
+
       [result.leftPlayerId, result.rightPlayerId].forEach((playerId) => {
         const item = ranking.get(playerId);
         if (!item) return;
+
         item.wins += wins;
-        item.victoryPoints += wins;
+        item.victoryPoints += wins * RANKING_POINTS.VICTORY;
       });
+    });
+
+    barbecueConfirmations.forEach((confirmation) => {
+      const item = ranking.get(confirmation.playerId);
+      if (!item || confirmation.status !== "going") return;
+
+      item.barbecues += 1;
+      item.barbecuePoints += RANKING_POINTS.BARBECUE;
     });
 
     ranking.forEach((item) => {
       item.totalPoints =
-        item.attendancePoints + item.barbecuePoints + item.victoryPoints;
+        item.attendancePoints +
+        item.barbecuePoints +
+        item.victoryPoints;
     });
 
     const sortRanking = (items) =>
@@ -56,10 +74,14 @@ export class RankingService {
 
     return {
       left: sortRanking(
-        [...ranking.values()].filter((item) => item.player.side === PLAYER_SIDE.LEFT),
+        [...ranking.values()].filter(
+          (item) => item.player.side === PLAYER_SIDE.LEFT,
+        ),
       ),
       right: sortRanking(
-        [...ranking.values()].filter((item) => item.player.side === PLAYER_SIDE.RIGHT),
+        [...ranking.values()].filter(
+          (item) => item.player.side === PLAYER_SIDE.RIGHT,
+        ),
       ),
     };
   }
