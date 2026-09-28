@@ -17,9 +17,9 @@
       <h1>Seu fute.<br />Sua patota.<br />Seu ranking.</h1>
       <p>Entre para acompanhar suas patotas, confirmar presença e disputar o ranking da galera.</p>
       <div class="auth-points">
-        <span>✓ Presença vale 1 ponto</span>
+        <span>✓ Presença vale 2 pontos</span>
         <span>✓ Cada vitória vale 1 ponto</span>
-        <span>✓ Churrasco vale 5 pontos 😄</span>
+        <span>✓ Churrasco vale 4 pontos 😄</span>
       </div>
     </div>
 
@@ -66,6 +66,7 @@
         <button class="nav-item is-active" type="button" data-page="groups"><span>🏖️</span> Minhas patotas</button>
         <button class="nav-item" type="button" data-page="create-group"><span>➕</span> Criar patota</button>
         <button class="nav-item" type="button" data-page="attendance"><span>✅</span> Presença</button>
+        <button class="nav-item" type="button" data-page="barbecue"><span>🔥</span> Churrasco</button>
         <button class="nav-item" type="button" data-page="draw"><span>🎲</span> Sorteio</button>
         <button class="nav-item" type="button" data-page="results"><span>🏁</span> Resultados</button>
         <button class="nav-item" type="button" data-page="ranking"><span>🏆</span> Ranking</button>
@@ -124,8 +125,45 @@
       </section>
 
       <section class="page is-hidden" data-page-section="attendance">
-        <div class="page-heading"><div><span class="section-kicker">PRESENÇA</span><h1>Você vai hoje?</h1><p>Confirme sua presença em cada patota. Ir ao jogo vale <strong>1 ponto</strong>.</p></div><div class="date-badge" id="attendance-date-label"></div></div>
+        <div class="page-heading"><div><span class="section-kicker">PRESENÇA</span><h1>Você vai hoje?</h1><p>Confirme sua presença em cada patota. Ir ao jogo vale <strong>2 pontos</strong>. A cada novo dia, a confirmação começa novamente sem resposta.</p></div><div class="date-badge" id="attendance-date-label"></div></div>
         <div id="attendance-list" class="attendance-grid"></div>
+      </section>
+
+      <section class="page is-hidden" data-page-section="barbecue">
+        <div class="page-heading">
+          <div>
+            <span class="section-kicker">CHURRASCO</span>
+            <h1>Churrasco da patota</h1>
+            <p>Quando o organizador marcar um churrasco, a confirmação abre 7 dias antes. Participar vale <strong>4 pontos</strong>.</p>
+          </div>
+        </div>
+
+        <div class="content-grid barbecue-page-grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <div><span class="section-kicker">MEUS CHURRASCOS</span><h2>Confirmar participação</h2></div>
+            </div>
+            <div id="barbecue-list" class="barbecue-list"></div>
+          </article>
+
+          <article id="barbecue-organizer-panel" class="panel">
+            <div class="panel-heading">
+              <div><span class="section-kicker">ORGANIZAÇÃO</span><h2>Organizar churrasco</h2></div>
+            </div>
+            <p class="muted">Escolha uma patota que você organiza e informe a data do churrasco.</p>
+            <form id="barbecue-form" class="form-stack" novalidate>
+              <label><span>Patota</span><select id="barbecue-group-select"></select></label>
+              <label><span>Data do churrasco</span><input id="barbecue-date" type="date" required /></label>
+              <p id="barbecue-error" class="form-error"></p>
+              <button class="button button--primary" type="submit">🔥 Agendar churrasco</button>
+            </form>
+            <div class="organizer-events-heading">
+              <span class="section-kicker">AGENDADOS</span>
+              <h3>Quem vai ficar?</h3>
+            </div>
+            <div id="barbecue-organizer-events" class="barbecue-organizer-events"></div>
+          </article>
+        </div>
       </section>
 
       <section class="page is-hidden" data-page-section="draw">
@@ -155,7 +193,7 @@
 
       <section class="page is-hidden" data-page-section="ranking">
         <div class="page-heading"><div><span class="section-kicker">RANKING</span><h1>Quem está voando?</h1><p>Ranking individual da patota, separado por lado.</p></div><select id="ranking-group-select" class="page-select"></select></div>
-        <div class="score-rules"><span><strong>+1</strong> presença</span><span><strong>+1</strong> por vitória</span><span><strong>+5</strong> churrasco</span></div>
+        <div class="score-rules"><span><strong>+2</strong> presença</span><span><strong>+1</strong> por vitória</span><span><strong>+4</strong> churrasco</span></div>
         <div class="ranking-grid">
           <article class="ranking-board"><div class="ranking-board__heading"><span class="side-dot side-dot--left"></span><div><span>RANKING</span><h2>Esquerdas</h2></div></div><div id="ranking-left" class="ranking-list"></div></article>
           <article class="ranking-board"><div class="ranking-board__heading"><span class="side-dot side-dot--right"></span><div><span>RANKING</span><h2>Direitas</h2></div></div><div id="ranking-right" class="ranking-list"></div></article>
