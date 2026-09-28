@@ -13,6 +13,12 @@ class MemoryStorage {
 
 const createRepository = () => new FuteMatchRepository(new MemoryStorage());
 
+const dateFromToday = (offsetDays = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
 const createGroup = (repository, overrides = {}) =>
   repository.createGroup({
     name: overrides.name ?? "Terça",
@@ -49,71 +55,122 @@ test("criador entra automaticamente na patota", () => {
   assert.equal(repository.getPlayersByGroup(group.id)[0].id, owner.id);
 });
 
-test("presença e churrasco ficam registrados por noite", () => {
+test("presença é registrada por data e começa vazia em outro dia", () => {
   const repository = createRepository();
   const group = createGroup(repository);
   const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
+  const firstDate = dateFromToday();
+  const nextDate = dateFromToday(1);
 
   repository.setAttendance({
     groupId: group.id,
     playerId: player.id,
-    date: "2026-09-28",
+    date: firstDate,
     status: "present",
-    barbecue: true,
   });
 
-  const attendance = repository.getPlayerAttendance(group.id, player.id, "2026-09-28");
-  assert.equal(attendance.status, "present");
-  assert.equal(attendance.barbecue, true);
+  assert.equal(
+    repository.getPlayerAttendance(group.id, player.id, firstDate).status,
+    "present",
+  );
+  assert.equal(
+    repository.getPlayerAttendance(group.id, player.id, nextDate),
+    null,
+  );
 });
 
-test("ausência remove indicação de churrasco", () => {
+test("organizador agenda churrasco e atleta confirma somente nos 7 dias anteriores", () => {
   const repository = createRepository();
   const group = createGroup(repository);
   const player = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
+  const eventDate = dateFromToday(7);
 
-  repository.setAttendance({
-    groupId: group.id,
+  const barbecue = repository.scheduleBarbecue(
+    group.id,
+    eventDate,
+    "user-1",
+  );
+
+  const confirmation = repository.setBarbecueConfirmation({
+    eventId: barbecue.id,
     playerId: player.id,
-    date: "2026-09-28",
-    status: "absent",
-    barbecue: true,
+    status: "going",
+    currentDate: dateFromToday(),
   });
 
-  assert.equal(repository.getPlayerAttendance(group.id, player.id, "2026-09-28").barbecue, false);
+  assert.equal(confirmation.status, "going");
+  assert.equal(
+    repository.getPlayerBarbecueConfirmation(barbecue.id, player.id).status,
+    "going",
+  );
+
+  const laterBarbecue = repository.scheduleBarbecue(
+    group.id,
+    dateFromToday(10),
+    "user-1",
+  );
+
+  assert.throws(
+    () =>
+      repository.setBarbecueConfirmation({
+        eventId: laterBarbecue.id,
+        playerId: player.id,
+        status: "going",
+        currentDate: dateFromToday(),
+      }),
+    /7 dias antes/i,
+  );
 });
 
-test("ranking soma presença, churrasco e vitórias para cada atleta da dupla", () => {
+test("ranking soma 2 por presença, 1 por vitória e 4 por churrasco", () => {
   const repository = createRepository();
   const group = createGroup(repository);
   const left = createPlayer(repository, group.id, "Lucas", PLAYER_SIDE.LEFT);
   const right = createPlayer(repository, group.id, "Pedro", PLAYER_SIDE.RIGHT);
+  const date = dateFromToday();
 
   repository.setAttendance({
     groupId: group.id,
     playerId: left.id,
-    date: "2026-09-28",
+    date,
     status: "present",
-    barbecue: true,
   });
   repository.setAttendance({
     groupId: group.id,
     playerId: right.id,
-    date: "2026-09-28",
+    date,
     status: "present",
-    barbecue: false,
   });
+
+  const barbecue = repository.scheduleBarbecue(group.id, date, "user-1");
+  repository.setBarbecueConfirmation({
+    eventId: barbecue.id,
+    playerId: left.id,
+    status: "going",
+    currentDate: date,
+  });
+
   repository.addPairResult({
     groupId: group.id,
-    date: "2026-09-28",
+    date,
     leftPlayerId: left.id,
     rightPlayerId: right.id,
     wins: 3,
   });
 
-  const ranking = RankingService.calculate(repository.getRankingData(group.id));
+  const ranking = RankingService.calculate(
+    repository.getRankingData(group.id, { asOfDate: date }),
+  );
+
+  assert.equal(ranking.left[0].attendancePoints, 2);
+  assert.equal(ranking.left[0].victoryPoints, 3);
+  assert.equal(ranking.left[0].barbecuePoints, 4);
   assert.equal(ranking.left[0].totalPoints, 9);
-  assert.equal(ranking.right[0].totalPoints, 4);
+
+  assert.equal(ranking.right[0].attendancePoints, 2);
+  assert.equal(ranking.right[0].victoryPoints, 3);
+  assert.equal(ranking.right[0].barbecuePoints, 0);
+  assert.equal(ranking.right[0].totalPoints, 5);
 });
 
 
