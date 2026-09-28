@@ -21,6 +21,7 @@ const elements = {
   myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
   detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
+  barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
   resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
   rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
@@ -34,6 +35,15 @@ const today = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 const formatDate = (value) => new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00`));
+const daysUntil = (value) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const [currentYear, currentMonth, currentDay] = today().split("-").map(Number);
+  return Math.round(
+    (Date.UTC(year, month - 1, day) -
+      Date.UTC(currentYear, currentMonth - 1, currentDay)) /
+      86400000,
+  );
+};
 const sideLabel = (side) => side === PLAYER_SIDE.LEFT ? "Esquerda" : "Direita";
 const scheduleLabel = (group) => group.startTime && group.endTime ? `${group.startTime} às ${group.endTime}` : "Horário não definido";
 
@@ -68,6 +78,7 @@ const showPage = (name) => {
   if (name === "groups") renderMyGroups();
   if (name === "group-detail") renderGroupDetail();
   if (name === "attendance") renderAttendance();
+  if (name === "barbecue") renderBarbecue();
   if (name === "draw") renderDraw();
   if (name === "results") renderResults();
   if (name === "ranking") renderRanking();
@@ -173,16 +184,143 @@ const renderAttendance = () => {
   const groups = myGroups();
   const player = currentPlayer();
   const date = today();
+
   elements.attendanceDateLabel.textContent = `Hoje • ${formatDate(date)}`;
-  if (!groups.length) { elements.attendanceList.innerHTML = '<div class="empty-state"><strong>Sem patotas</strong><span>Entre em uma patota para confirmar presença.</span></div>'; return; }
-  elements.attendanceList.innerHTML = groups.map((group) => {
-    const attendance = repository.getPlayerAttendance(group.id, player.id, date);
-    const present = attendance?.status === "present";
-    const absent = attendance?.status === "absent";
-    const statusClass = present ? "status-text--present" : absent ? "status-text--absent" : "";
-    const statusText = present ? "✓ Presença confirmada" : absent ? "Ausência informada" : "Ainda não respondeu";
-    return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirmar presença soma <strong>+1 ponto</strong> no ranking desta patota.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}">✕ Não vou</button></div><label class="barbecue-toggle"><input type="checkbox" data-barbecue="${group.id}" ${attendance?.barbecue ? "checked" : ""} ${present ? "" : "disabled"}/><span><strong>🔥 Vou ficar no churrasco</strong><small>Vale +5 pontos. Disponível após confirmar presença.</small></span></label></article>`;
-  }).join("");
+
+  if (!groups.length) {
+    elements.attendanceList.innerHTML =
+      '<div class="empty-state"><strong>Sem patotas</strong><span>Entre em uma patota para confirmar presença.</span></div>';
+    return;
+  }
+
+  elements.attendanceList.innerHTML = groups
+    .map((group) => {
+      const attendance = repository.getPlayerAttendance(
+        group.id,
+        player.id,
+        date,
+      );
+      const present = attendance?.status === "present";
+      const absent = attendance?.status === "absent";
+      const statusClass = present
+        ? "status-text--present"
+        : absent
+          ? "status-text--absent"
+          : "";
+      const statusText = present
+        ? "✓ Presença confirmada"
+        : absent
+          ? "Ausência informada"
+          : "Ainda não respondeu";
+
+      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirmar presença soma <strong>+2 pontos</strong> no ranking desta patota. Amanhã esta confirmação começa novamente em branco.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}">✕ Não vou</button></div></article>`;
+    })
+    .join("");
+};
+
+const renderBarbecue = () => {
+  const account = currentAccount();
+  const player = currentPlayer();
+
+  if (!account || !player) return;
+
+  const events = repository.getBarbecueEventsForUser(account.id);
+  const organizerGroups = repository.getGroupsOrganizedByUser(account.id);
+
+  elements.barbecueDate.min = today();
+  if (!elements.barbecueDate.value) {
+    elements.barbecueDate.value = today();
+  }
+
+  if (!events.length) {
+    elements.barbecueList.innerHTML =
+      '<div class="empty-state"><strong>Nenhum churrasco agendado</strong><span>Quando um organizador marcar uma data, ela aparecerá aqui.</span></div>';
+  } else {
+    elements.barbecueList.innerHTML = events
+      .map((event) => {
+        const group = repository.getGroupById(event.groupId);
+        const confirmation = repository.getPlayerBarbecueConfirmation(
+          event.id,
+          player.id,
+        );
+        const remainingDays = daysUntil(event.date);
+        const confirmationOpen =
+          remainingDays >= 0 && remainingDays <= 7;
+        const going = confirmation?.status === "going";
+        const notGoing = confirmation?.status === "not_going";
+
+        const availabilityText = confirmationOpen
+          ? remainingDays === 0
+            ? "É hoje"
+            : remainingDays === 1
+              ? "É amanhã"
+              : `Faltam ${remainingDays} dias`
+          : `Confirmação abre em ${remainingDays - 7} dia(s)`;
+
+        return `<article class="barbecue-card"><div class="barbecue-card__head"><div><span class="section-kicker">${escapeHtml(group?.name ?? "Patota")}</span><h3>🔥 ${formatDate(event.date)}</h3></div><span class="meta-chip">${availabilityText}</span></div><p>Ficar no churrasco vale <strong>+4 pontos</strong>.</p>${
+          confirmationOpen
+            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button button--ghost ${notGoing ? "is-selected" : ""}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
+            : `<div class="barbecue-locked">A confirmação ficará disponível 7 dias antes.</div>`
+        }</article>`;
+      })
+      .join("");
+  }
+
+  elements.barbecueOrganizerPanel.classList.toggle(
+    "is-hidden",
+    !organizerGroups.length,
+  );
+
+  if (!organizerGroups.length) return;
+
+  groupOptions(
+    elements.barbecueGroupSelect,
+    organizerGroups,
+    elements.barbecueGroupSelect.value,
+  );
+
+  const organizerGroupIds = new Set(
+    organizerGroups.map((group) => group.id),
+  );
+  const organizerEvents = repository
+    .getState()
+    .barbecueEvents.filter(
+      (event) =>
+        organizerGroupIds.has(event.groupId) &&
+        event.active !== false &&
+        event.date >= today(),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!organizerEvents.length) {
+    elements.barbecueOrganizerEvents.innerHTML =
+      '<div class="empty-state empty-state--compact"><span>Você ainda não agendou nenhum churrasco.</span></div>';
+    return;
+  }
+
+  elements.barbecueOrganizerEvents.innerHTML = organizerEvents
+    .map((event) => {
+      const group = repository.getGroupById(event.groupId);
+      const confirmations = repository.getBarbecueConfirmations(event.id);
+      const goingIds = confirmations
+        .filter((confirmation) => confirmation.status === "going")
+        .map((confirmation) => confirmation.playerId);
+      const goingPlayers = goingIds
+        .map((playerId) => repository.getPlayerById(playerId))
+        .filter(Boolean);
+
+      const confirmedList = goingPlayers.length
+        ? goingPlayers
+            .map(
+              (confirmedPlayer) =>
+                `<span class="barbecue-person">🔥 ${escapeHtml(confirmedPlayer.name)}</span>`,
+            )
+            .join("")
+        : '<span class="muted">Ninguém confirmou ainda.</span>';
+
+      return `<article class="barbecue-admin-card"><div class="barbecue-admin-card__head"><div><strong>${escapeHtml(group?.name ?? "Patota")}</strong><small>${formatDate(event.date)} • ${goingPlayers.length} confirmado(s)</small></div><button class="button button--danger button--small" type="button" data-cancel-barbecue="${event.id}">Cancelar</button></div><div class="barbecue-people">${confirmedList}</div></article>`;
+    })
+    .join("");
 };
 
 const playerOption = (player, checked) => `<label class="player-select-card"><input type="checkbox" data-draw-player="${player.id}" data-player-side="${player.side}" ${checked ? "checked" : ""}/><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><span class="player-select-card__text"><strong>${escapeHtml(player.name)}</strong><small>${sideLabel(player.side)}</small></span></label>`;
@@ -337,8 +475,85 @@ elements.detailMembers.addEventListener("click", (event) => {
 });
 
 // Attendance
-elements.attendanceList.addEventListener("click", (event) => { const button = event.target.closest("[data-attendance]"); if (!button) return; repository.setAttendance({ groupId: button.dataset.groupId, playerId: currentPlayer().id, date: today(), status: button.dataset.attendance, barbecue: false }); renderAttendance(); renderMyGroups(); showToast(button.dataset.attendance === "present" ? "Presença confirmada: +1 ponto." : "Ausência registrada."); });
-elements.attendanceList.addEventListener("change", (event) => { const checkbox = event.target.closest("[data-barbecue]"); if (!checkbox) return; const groupId = checkbox.dataset.barbecue; repository.setAttendance({ groupId, playerId: currentPlayer().id, date: today(), status: "present", barbecue: checkbox.checked }); renderAttendance(); showToast(checkbox.checked ? "Churrasco marcado: +5 pontos." : "Churrasco desmarcado."); });
+elements.attendanceList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-attendance]");
+  if (!button) return;
+
+  repository.setAttendance({
+    groupId: button.dataset.groupId,
+    playerId: currentPlayer().id,
+    date: today(),
+    status: button.dataset.attendance,
+  });
+
+  renderAttendance();
+  renderMyGroups();
+  showToast(
+    button.dataset.attendance === "present"
+      ? "Presença confirmada: +2 pontos."
+      : "Ausência registrada.",
+  );
+});
+
+// Barbecue
+elements.barbecueForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  elements.barbecueError.textContent = "";
+
+  try {
+    repository.scheduleBarbecue(
+      elements.barbecueGroupSelect.value,
+      elements.barbecueDate.value,
+      currentAccount()?.id,
+    );
+    renderBarbecue();
+    showToast("Churrasco agendado. A confirmação abre 7 dias antes.");
+  } catch (error) {
+    elements.barbecueError.textContent = error.message;
+  }
+});
+
+elements.barbecueList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-barbecue-response]");
+  if (!button) return;
+
+  try {
+    repository.setBarbecueConfirmation({
+      eventId: button.dataset.barbecueEvent,
+      playerId: currentPlayer().id,
+      status: button.dataset.barbecueResponse,
+      currentDate: today(),
+    });
+    renderBarbecue();
+    showToast(
+      button.dataset.barbecueResponse === "going"
+        ? "Churrasco confirmado: +4 pontos após a data do evento."
+        : "Você informou que não ficará no churrasco.",
+    );
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.barbecueOrganizerEvents.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-cancel-barbecue]");
+  if (!button) return;
+
+  if (!window.confirm("Cancelar este churrasco?")) return;
+
+  try {
+    repository.cancelBarbecue(
+      button.dataset.cancelBarbecue,
+      currentAccount()?.id,
+    );
+    renderBarbecue();
+    showToast("Churrasco cancelado.");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.barbecueGroupSelect.addEventListener("change", renderBarbecue);
 
 // Draw
 elements.drawGroupSelect.addEventListener("change", () => {
