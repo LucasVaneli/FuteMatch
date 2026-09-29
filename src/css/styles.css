@@ -224,3 +224,29 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
   font-weight: 700;
   line-height: 1.45;
 }
+
+
+/* Estados de confirmação e visualização */
+.barbecue-actions .button--danger.is-selected {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  box-shadow: none;
+}
+
+.win-readonly {
+  display: grid;
+  min-width: 76px;
+  justify-items: end;
+  gap: 2px;
+}
+
+.win-readonly strong {
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.win-readonly span {
+  color: var(--muted);
+  font-size: .7rem;
+}
