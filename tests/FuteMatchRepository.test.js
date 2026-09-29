@@ -519,3 +519,150 @@ test("excluir patota remove registros relacionados e preserva atletas", () => {
   assert.equal(repository.getPlayerById(owner.id)?.name, "Organizador");
   assert.equal(repository.getPlayerById(partner.id)?.name, "Parceiro");
 });
+
+
+test("organizador adicional recebe as mesmas permissões de gestão da patota", () => {
+  const repository = createRepository();
+
+  repository.createAccount({
+    email: "owner-role@example.test",
+    passwordHash: "hash-owner-role",
+    name: "Criador",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const ownerAccount = repository.getAccountByEmail("owner-role@example.test");
+
+  repository.createAccount({
+    email: "helper-role@example.test",
+    passwordHash: "hash-helper-role",
+    name: "Ajudante",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const helperAccount = repository.getAccountByEmail("helper-role@example.test");
+
+  const candidate = repository.createPlayer({
+    name: "Novo membro",
+    birthDate: "1992-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+
+  const group = createGroup(repository, {
+    ownerUserId: ownerAccount.id,
+    ownerPlayerId: ownerAccount.playerId,
+  });
+
+  repository.addPlayerToGroup(
+    helperAccount.playerId,
+    group.id,
+    ownerAccount.id,
+  );
+
+  repository.updateGroupMemberRole(
+    group.id,
+    helperAccount.playerId,
+    "organizer",
+    ownerAccount.id,
+  );
+
+  assert.equal(
+    repository.isGroupOrganizer(group.id, helperAccount.id),
+    true,
+  );
+  assert.equal(
+    repository.getGroupsOrganizedByUser(helperAccount.id)[0].id,
+    group.id,
+  );
+
+  const updated = repository.updateGroupSchedule(
+    group.id,
+    {
+      weekday: GROUP_WEEKDAY.FRIDAY,
+      startTime: "20:00",
+      endTime: "22:00",
+    },
+    helperAccount.id,
+  );
+  assert.equal(updated.weekday, GROUP_WEEKDAY.FRIDAY);
+
+  repository.addPlayerToGroup(
+    candidate.id,
+    group.id,
+    helperAccount.id,
+  );
+  assert.equal(repository.isPlayerInGroup(candidate.id, group.id), true);
+
+  repository.setGroupActive(group.id, false, helperAccount.id);
+  assert.equal(repository.getGroupById(group.id).active, false);
+
+  repository.setGroupActive(group.id, true, helperAccount.id);
+  repository.deleteGroup(group.id, helperAccount.id);
+  assert.equal(repository.getGroupById(group.id), null);
+});
+
+test("atleta comum não pode promover membros e criador não pode ser rebaixado", () => {
+  const repository = createRepository();
+
+  repository.createAccount({
+    email: "creator-protected@example.test",
+    passwordHash: "hash-creator",
+    name: "Criador protegido",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const ownerAccount = repository.getAccountByEmail(
+    "creator-protected@example.test",
+  );
+
+  repository.createAccount({
+    email: "member-role@example.test",
+    passwordHash: "hash-member",
+    name: "Membro",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const memberAccount = repository.getAccountByEmail(
+    "member-role@example.test",
+  );
+
+  const group = createGroup(repository, {
+    ownerUserId: ownerAccount.id,
+    ownerPlayerId: ownerAccount.playerId,
+  });
+
+  repository.addPlayerToGroup(
+    memberAccount.playerId,
+    group.id,
+    ownerAccount.id,
+  );
+
+  assert.throws(
+    () =>
+      repository.updateGroupMemberRole(
+        group.id,
+        memberAccount.playerId,
+        "organizer",
+        memberAccount.id,
+      ),
+    /somente um organizador/i,
+  );
+
+  repository.updateGroupMemberRole(
+    group.id,
+    memberAccount.playerId,
+    "organizer",
+    ownerAccount.id,
+  );
+
+  assert.throws(
+    () =>
+      repository.updateGroupMemberRole(
+        group.id,
+        ownerAccount.playerId,
+        "member",
+        memberAccount.id,
+      ),
+    /deve permanecer como organizador/i,
+  );
+});
