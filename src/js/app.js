@@ -178,7 +178,7 @@ const renderMyGroups = () => {
             )
           : null;
         const members = repository.getPlayersByGroup(group.id).length;
-        const isOwner = group.ownerUserId === account?.id;
+        const isOwner = repository.isGroupOrganizer(group.id, account?.id);
 
         let status = "Dia não definido";
         if (attendanceWindow.available) {
@@ -244,10 +244,22 @@ const renderGroupDetail = () => {
   elements.detailTime.textContent = group.startTime ?? "--:--";
   elements.detailMembers.innerHTML = players.length
     ? players
-        .map(
-          (player) =>
-            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
-        )
+        .map((player) => {
+          const memberRole = repository.getMemberRole(group.id, player.id);
+          const isCreator = player.id === ownerPlayerId;
+          const roleLabel = isCreator
+            ? "Criador"
+            : memberRole === "organizer"
+              ? "Organizador"
+              : "Atleta";
+
+          const roleControl =
+            isOwner && !isCreator
+              ? `<select class="member-role-select" data-member-role="${player.id}" aria-label="Cargo de ${escapeHtml(player.name)}"><option value="member" ${memberRole === "member" ? "selected" : ""}>Atleta</option><option value="organizer" ${memberRole === "organizer" ? "selected" : ""}>Organizador</option></select>`
+              : `<span class="role-pill role-pill--${isCreator ? "creator" : memberRole}">${roleLabel}</span>`;
+
+          return `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${roleControl}${isOwner && !isCreator ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`;
+        })
         .join("")
     : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
 
@@ -883,6 +895,35 @@ elements.detailAddPlayerButton.addEventListener("click", async () => {
     showToast("Atleta adicionado à patota.");
   } catch (error) {
     elements.detailAddPlayerError.textContent = error.message;
+  }
+});
+
+elements.detailMembers.addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-member-role]");
+  if (!select) return;
+
+  const groupId = repository.getCurrentGroupId();
+  const player = repository.getPlayerById(select.dataset.memberRole);
+
+  if (!player) return;
+
+  try {
+    await repository.updateGroupMemberRole(
+      groupId,
+      player.id,
+      select.value,
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast(
+      select.value === "organizer"
+        ? `${player.name} agora é organizador da patota.`
+        : `${player.name} agora é atleta da patota.`,
+    );
+  } catch (error) {
+    renderGroupDetail();
+    showToast(error.message);
   }
 });
 
