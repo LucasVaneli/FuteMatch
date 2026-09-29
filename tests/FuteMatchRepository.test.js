@@ -425,3 +425,97 @@ test("somente o organizador agenda churrasco e os pontos entram na data do event
   );
   assert.equal(onEventDate.left[0].barbecuePoints, 4);
 });
+
+
+test("somente o organizador pode inativar e reativar a patota", () => {
+  const repository = createRepository();
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+  });
+
+  assert.throws(
+    () => repository.setGroupActive(group.id, false, "other-user"),
+    /somente o organizador/i,
+  );
+
+  repository.setGroupActive(group.id, false, "owner-user");
+  assert.equal(repository.getGroupById(group.id).active, false);
+  assert.equal(repository.getGroups().length, 0);
+
+  repository.setGroupActive(group.id, true, "owner-user");
+  assert.equal(repository.getGroupById(group.id).active, true);
+});
+
+test("excluir patota remove registros relacionados e preserva atletas", () => {
+  const repository = createRepository();
+  const owner = repository.createPlayer({
+    name: "Organizador",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const partner = repository.createPlayer({
+    name: "Parceiro",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+    ownerPlayerId: owner.id,
+    weekday: GROUP_WEEKDAY.MONDAY,
+  });
+
+  repository.addPlayerToGroup(partner.id, group.id, "owner-user");
+
+  const eventDate = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+  const votingDate = addDaysToIso(eventDate, -2);
+
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: owner.id,
+    date: eventDate,
+    status: "present",
+    currentDate: votingDate,
+  });
+
+  const barbecue = repository.scheduleBarbecue(
+    group.id,
+    eventDate,
+    "owner-user",
+  );
+
+  repository.setBarbecueConfirmation({
+    eventId: barbecue.id,
+    playerId: owner.id,
+    status: "going",
+    currentDate: eventDate,
+  });
+
+  repository.addPairResult({
+    groupId: group.id,
+    date: eventDate,
+    leftPlayerId: owner.id,
+    rightPlayerId: partner.id,
+    wins: 2,
+  });
+
+  assert.throws(
+    () => repository.deleteGroup(group.id, "other-user"),
+    /somente o organizador/i,
+  );
+
+  repository.deleteGroup(group.id, "owner-user");
+
+  const state = repository.getState();
+  assert.equal(repository.getGroupById(group.id), null);
+  assert.equal(state.memberships.some((item) => item.groupId === group.id), false);
+  assert.equal(state.attendances.some((item) => item.groupId === group.id), false);
+  assert.equal(state.barbecueEvents.some((item) => item.groupId === group.id), false);
+  assert.equal(
+    state.barbecueConfirmations.some((item) => item.eventId === barbecue.id),
+    false,
+  );
+  assert.equal(state.sessions.some((item) => item.groupId === group.id), false);
+  assert.equal(state.pairResults.length, 0);
+  assert.equal(repository.getPlayerById(owner.id)?.name, "Organizador");
+  assert.equal(repository.getPlayerById(partner.id)?.name, "Parceiro");
+});
