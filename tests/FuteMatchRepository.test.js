@@ -645,7 +645,7 @@ test("atleta comum não pode promover membros e criador não pode ser rebaixado"
         "organizer",
         memberAccount.id,
       ),
-    /somente um organizador/i,
+    /somente o organizador/i,
   );
 
   repository.updateGroupMemberRole(
