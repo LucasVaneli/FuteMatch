@@ -615,7 +615,7 @@ export class FuteMatchRepository {
       : null;
 
     if (!owner && !organizerMembership) {
-      throw new Error("Somente um organizador da patota pode realizar esta ação.");
+      throw new Error("Somente o organizador da patota pode realizar esta ação.");
     }
 
     return group;
