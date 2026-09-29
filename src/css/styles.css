@@ -250,3 +250,134 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
   color: var(--muted);
   font-size: .7rem;
 }
+
+
+/* Ciclo de vida da patota */
+.inactive-groups-section {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border);
+}
+
+.inactive-groups-heading {
+  margin-bottom: 14px;
+}
+
+.inactive-groups-heading h2,
+.danger-zone h2,
+.inactive-group-card h3 {
+  margin: 4px 0 0;
+}
+
+.inactive-groups-heading p,
+.danger-zone p,
+.inactive-group-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.5;
+}
+
+.inactive-groups-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inactive-group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px dashed rgba(255, 255, 255, .14);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, .02);
+  padding: 15px 16px;
+}
+
+.status-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, .055);
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.inactive-group-card__actions,
+.danger-zone__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.danger-zone {
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(255, 107, 107, .18);
+  border-radius: var(--radius-md);
+  background: rgba(255, 107, 107, .035);
+  padding: 16px;
+}
+
+@media (max-width: 620px) {
+  .inactive-group-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inactive-group-card__actions,
+  .danger-zone__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Cargos da patota */
+.member-role-select {
+  width: auto;
+  min-width: 132px;
+  min-height: 36px;
+  padding: 7px 34px 7px 11px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.role-pill--organizer {
+  border-color: rgba(255,207,51,.24);
+  background: rgba(255,207,51,.08);
+  color: var(--primary);
+}
+
+.role-pill--creator {
+  border-color: rgba(99,230,190,.24);
+  background: rgba(99,230,190,.08);
+  color: var(--success);
+}
+
+@media (max-width: 620px) {
+  .member-role-select {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+}

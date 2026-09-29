@@ -86,6 +86,16 @@
           <button class="button button--primary" type="button" data-go-to="create-group">+ Nova patota</button>
         </div>
         <div id="my-groups-list" class="group-grid"></div>
+        <section id="inactive-groups-section" class="inactive-groups-section is-hidden">
+          <div class="inactive-groups-heading">
+            <div>
+              <span class="section-kicker">ARQUIVADAS</span>
+              <h2>Patotas inativas</h2>
+              <p>Somente você, como organizador, vê estas patotas. Reative ou exclua definitivamente.</p>
+            </div>
+          </div>
+          <div id="inactive-groups-list" class="inactive-groups-list"></div>
+        </section>
       </section>
 
       <section class="page is-hidden" data-page-section="create-group">
@@ -129,10 +139,22 @@
               <button class="button button--secondary" type="submit">Salvar dia e horário</button>
             </form>
             <div class="management-divider"></div>
-            <div class="panel-heading"><div><span class="section-kicker">ATLETAS</span><h2>Gerenciar atletas</h2></div></div>
-            <p class="muted">Somente o organizador pode adicionar ou remover atletas desta patota.</p>
+            <div class="panel-heading"><div><span class="section-kicker">EQUIPE</span><h2>Cargos e atletas</h2></div></div>
+            <p class="muted">Organizadores podem adicionar ou remover atletas e promover outros membros a organizador.</p>
             <div class="inline-form"><select id="detail-add-player-select"></select><button id="detail-add-player-button" class="button button--secondary" type="button">Adicionar</button></div>
             <p id="detail-add-player-error" class="form-error"></p>
+            <div class="management-divider"></div>
+            <div class="danger-zone">
+              <div>
+                <span class="section-kicker">STATUS DA PATOTA</span>
+                <h2>Inativar ou excluir</h2>
+                <p class="muted">Inativar preserva todo o histórico. Excluir remove permanentemente a patota e os registros relacionados.</p>
+              </div>
+              <div class="danger-zone__actions">
+                <button id="detail-deactivate-group-button" class="button button--ghost" type="button">Inativar patota</button>
+                <button id="detail-delete-group-button" class="button button--danger" type="button">Excluir definitivamente</button>
+              </div>
+            </div>
           </article>
         </div>
       </section>

@@ -20,8 +20,8 @@ const elements = {
   registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"), registerMessage: $("#register-message"),
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
-  myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
-  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailScheduleForm: $("#detail-schedule-form"), detailWeekday: $("#detail-weekday"), detailStartTime: $("#detail-start-time"), detailEndTime: $("#detail-end-time"), detailScheduleError: $("#detail-schedule-error"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"),
+  myGroupsList: $("#my-groups-list"), inactiveGroupsSection: $("#inactive-groups-section"), inactiveGroupsList: $("#inactive-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
+  detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailScheduleForm: $("#detail-schedule-form"), detailWeekday: $("#detail-weekday"), detailStartTime: $("#detail-start-time"), detailEndTime: $("#detail-end-time"), detailScheduleError: $("#detail-schedule-error"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"), detailDeactivateGroupButton: $("#detail-deactivate-group-button"), detailDeleteGroupButton: $("#detail-delete-group-button"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
@@ -130,44 +130,86 @@ const groupOptions = (select, groups, preferredId) => {
   return selected ?? null;
 };
 
-const renderMyGroups = () => {
-  const groups = myGroups();
-  if (!groups.length) {
-    elements.myGroupsList.innerHTML = `<div class="empty-state"><strong>Você ainda não está em nenhuma patota</strong><span>Crie a sua primeira patota ou peça para um organizador adicionar seu atleta.</span><button class="button button--primary" type="button" data-empty-create>+ Criar patota</button></div>`;
-    elements.myGroupsList.querySelector("[data-empty-create]")?.addEventListener("click", () => showPage("create-group"));
-    return;
+const confirmPermanentGroupDeletion = (group) => {
+  const accepted = window.confirm(
+    `Excluir “${group.name}” definitivamente?\n\nSerão apagados os vínculos de atletas, presenças, churrascos, confirmações, noites e resultados desta patota. Esta ação não pode ser desfeita.`,
+  );
+
+  if (!accepted) return false;
+
+  const typedName = window.prompt(
+    `Para confirmar, digite exatamente o nome da patota:\n${group.name}`,
+  );
+
+  if (typedName?.trim() !== group.name) {
+    showToast("Exclusão cancelada: o nome informado não confere.");
+    return false;
   }
 
-  const player = currentPlayer();
-  const date = today();
+  return true;
+};
 
-  elements.myGroupsList.innerHTML = groups
-    .map((group) => {
-      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
-      const attendance = attendanceWindow.targetDate
-        ? repository.getPlayerAttendance(
-            group.id,
-            player.id,
-            attendanceWindow.targetDate,
-          )
-        : null;
-      const members = repository.getPlayersByGroup(group.id).length;
-      const isOwner = group.ownerUserId === currentAccount()?.id;
+const renderMyGroups = () => {
+  const groups = myGroups();
+  const account = currentAccount();
+  const inactiveGroups = account
+    ? repository
+        .getGroupsOrganizedByUser(account.id, { includeInactive: true })
+        .filter((group) => group.active === false)
+    : [];
 
-      let status = "Dia não definido";
-      if (attendanceWindow.available) {
-        if (!attendanceWindow.isOpen) {
-          status = `Votação abre ${formatDate(attendanceWindow.opensOn)}`;
-        } else if (attendance?.status === "present") {
-          status = "Presença confirmada";
-        } else if (attendance?.status === "absent") {
-          status = "Ausência informada";
-        } else {
-          status = "Presença pendente";
+  if (!groups.length) {
+    elements.myGroupsList.innerHTML = `<div class="empty-state"><strong>Você ainda não está em nenhuma patota ativa</strong><span>Crie uma nova patota, peça para um organizador adicionar seu atleta ou reative uma patota arquivada abaixo.</span><button class="button button--primary" type="button" data-empty-create>+ Criar patota</button></div>`;
+    elements.myGroupsList
+      .querySelector("[data-empty-create]")
+      ?.addEventListener("click", () => showPage("create-group"));
+  } else {
+    const player = currentPlayer();
+    const date = today();
+
+    elements.myGroupsList.innerHTML = groups
+      .map((group) => {
+        const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+        const attendance = attendanceWindow.targetDate
+          ? repository.getPlayerAttendance(
+              group.id,
+              player.id,
+              attendanceWindow.targetDate,
+            )
+          : null;
+        const members = repository.getPlayersByGroup(group.id).length;
+        const isOwner = repository.isGroupOrganizer(group.id, account?.id);
+
+        let status = "Dia não definido";
+        if (attendanceWindow.available) {
+          if (!attendanceWindow.isOpen) {
+            status = `Votação abre ${formatDate(attendanceWindow.opensOn)}`;
+          } else if (attendance?.status === "present") {
+            status = "Presença confirmada";
+          } else if (attendance?.status === "absent") {
+            status = "Ausência informada";
+          } else {
+            status = "Presença pendente";
+          }
         }
-      }
 
-      return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ""}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+        return `<article class="group-card"><div class="group-card__top"><span class="group-card__icon">🏖️</span><div class="group-card__badges">${isOwner ? '<span class="meta-chip owner-chip">Organizador</span>' : ""}<div class="group-card__status"><span class="meta-chip">👥 ${members} atletas</span><span class="meta-chip">${escapeHtml(status)}</span></div></div></div><h2>${escapeHtml(group.name)}</h2><p>${scheduleLabel(group)}</p><div class="group-card__actions"><button class="button button--secondary button--small" type="button" data-open-group="${group.id}">Ver patota</button><button class="button button--ghost button--small" type="button" data-presence-group="${group.id}">Presença</button></div></article>`;
+      })
+      .join("");
+  }
+
+  elements.inactiveGroupsSection.classList.toggle(
+    "is-hidden",
+    !inactiveGroups.length,
+  );
+
+  elements.inactiveGroupsList.innerHTML = inactiveGroups
+    .map((group) => {
+      const members = repository.getPlayersByGroup(group.id, {
+        includeInactive: true,
+      }).length;
+
+      return `<article class="inactive-group-card"><div><span class="status-pill">Inativa</span><h3>${escapeHtml(group.name)}</h3><p>${scheduleLabel(group)} • ${members} atleta(s)</p></div><div class="inactive-group-card__actions"><button class="button button--secondary button--small" type="button" data-reactivate-group="${group.id}">Reativar</button><button class="button button--danger button--small" type="button" data-delete-inactive-group="${group.id}">Excluir definitivamente</button></div></article>`;
     })
     .join("");
 };
@@ -202,10 +244,22 @@ const renderGroupDetail = () => {
   elements.detailTime.textContent = group.startTime ?? "--:--";
   elements.detailMembers.innerHTML = players.length
     ? players
-        .map(
-          (player) =>
-            `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${isOwner && player.id !== ownerPlayerId ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`,
-        )
+        .map((player) => {
+          const memberRole = repository.getMemberRole(group.id, player.id);
+          const isCreator = player.id === ownerPlayerId;
+          const roleLabel = isCreator
+            ? "Criador"
+            : memberRole === "organizer"
+              ? "Organizador"
+              : "Atleta";
+
+          const roleControl =
+            isOwner && !isCreator
+              ? `<select class="member-role-select" data-member-role="${player.id}" aria-label="Cargo de ${escapeHtml(player.name)}"><option value="member" ${memberRole === "member" ? "selected" : ""}>Atleta</option><option value="organizer" ${memberRole === "organizer" ? "selected" : ""}>Organizador</option></select>`
+              : `<span class="role-pill role-pill--${isCreator ? "creator" : memberRole}">${roleLabel}</span>`;
+
+          return `<div class="member-row"><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><div class="member-row__text"><strong>${escapeHtml(player.name)}</strong><small>${presentIds.has(player.id) && attendanceWindow.targetDate ? `✅ Confirmado para ${formatDate(attendanceWindow.targetDate)}` : "Presença não confirmada"}</small></div><span class="side-pill side-pill--${player.side}">${sideLabel(player.side)}</span>${roleControl}${isOwner && !isCreator ? `<button class="button button--danger button--small member-remove-button" type="button" data-remove-player="${player.id}">Remover</button>` : ""}</div>`;
+        })
         .join("")
     : '<div class="empty-state"><span>Nenhum atleta nesta patota.</span></div>';
 
@@ -771,6 +825,36 @@ elements.myGroupsList.addEventListener("click", (event) => {
   else showPage("attendance");
 });
 
+elements.inactiveGroupsList.addEventListener("click", async (event) => {
+  const reactivateButton = event.target.closest("[data-reactivate-group]");
+  const deleteButton = event.target.closest("[data-delete-inactive-group]");
+  const groupId =
+    reactivateButton?.dataset.reactivateGroup ??
+    deleteButton?.dataset.deleteInactiveGroup;
+
+  if (!groupId) return;
+
+  const group = repository.getGroupById(groupId);
+  if (!group) return;
+
+  try {
+    if (reactivateButton) {
+      await repository.setGroupActive(group.id, true);
+      renderMyGroups();
+      showToast(`Patota “${group.name}” reativada.`);
+      return;
+    }
+
+    if (!confirmPermanentGroupDeletion(group)) return;
+
+    await repository.deleteGroup(group.id);
+    renderMyGroups();
+    showToast(`Patota “${group.name}” excluída definitivamente.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
 elements.detailScheduleForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.detailScheduleError.textContent = "";
@@ -814,6 +898,35 @@ elements.detailAddPlayerButton.addEventListener("click", async () => {
   }
 });
 
+elements.detailMembers.addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-member-role]");
+  if (!select) return;
+
+  const groupId = repository.getCurrentGroupId();
+  const player = repository.getPlayerById(select.dataset.memberRole);
+
+  if (!player) return;
+
+  try {
+    await repository.updateGroupMemberRole(
+      groupId,
+      player.id,
+      select.value,
+      currentAccount()?.id,
+    );
+    renderGroupDetail();
+    renderMyGroups();
+    showToast(
+      select.value === "organizer"
+        ? `${player.name} agora é organizador da patota.`
+        : `${player.name} agora é atleta da patota.`,
+    );
+  } catch (error) {
+    renderGroupDetail();
+    showToast(error.message);
+  }
+});
+
 elements.detailMembers.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-player]");
   if (!button) return;
@@ -834,6 +947,42 @@ elements.detailMembers.addEventListener("click", async (event) => {
     renderGroupDetail();
     renderMyGroups();
     showToast(`${player.name} foi removido da patota.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.detailDeactivateGroupButton.addEventListener("click", async () => {
+  const group = repository.getGroupById(repository.getCurrentGroupId());
+  if (!group) return;
+
+  const accepted = window.confirm(
+    `Inativar “${group.name}”?\n\nA patota deixará de aparecer nas telas de presença, sorteio, resultados e ranking, mas todo o histórico será preservado.`,
+  );
+
+  if (!accepted) return;
+
+  try {
+    await repository.setGroupActive(group.id, false);
+    repository.setCurrentGroup(null);
+    renderMyGroups();
+    showPage("groups");
+    showToast(`Patota “${group.name}” inativada.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+elements.detailDeleteGroupButton.addEventListener("click", async () => {
+  const group = repository.getGroupById(repository.getCurrentGroupId());
+  if (!group || !confirmPermanentGroupDeletion(group)) return;
+
+  try {
+    await repository.deleteGroup(group.id);
+    repository.setCurrentGroup(null);
+    renderMyGroups();
+    showPage("groups");
+    showToast(`Patota “${group.name}” excluída definitivamente.`);
   } catch (error) {
     showToast(error.message);
   }

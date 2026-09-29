@@ -109,7 +109,7 @@ export class SupabaseFuteMatchRepository {
         ),
       this.client
         .from("group_members")
-        .select("group_id, user_id, active, joined_at, left_at"),
+        .select("group_id, user_id, active, joined_at, left_at, role"),
       this.client
         .from("attendance")
         .select("group_id, user_id, event_date, status, updated_at"),
@@ -174,6 +174,7 @@ export class SupabaseFuteMatchRepository {
         active: row.active,
         joinedAt: row.joined_at,
         leftAt: row.left_at,
+        role: row.role ?? "member",
       })),
       attendances: (attendanceResult.data ?? []).map((row) => ({
         groupId: row.group_id,
@@ -222,7 +223,10 @@ export class SupabaseFuteMatchRepository {
     );
 
     if (!currentStillExists) {
-      this.setCurrentGroup(this.state.groups[0]?.id ?? null);
+      const firstActiveGroup = this.state.groups.find(
+        (group) => group.active !== false,
+      );
+      this.setCurrentGroup(firstActiveGroup?.id ?? null);
     }
   }
 
@@ -355,9 +359,27 @@ export class SupabaseFuteMatchRepository {
   getGroupsOrganizedByUser(userId, { includeInactive = false } = {}) {
     return this.state.groups.filter(
       (group) =>
-        group.ownerUserId === userId &&
+        this.isGroupOrganizer(group.id, userId) &&
         (includeInactive || group.active !== false),
     );
+  }
+
+  getMembership(groupId, playerId) {
+    return (
+      this.state.memberships.find(
+        (membership) =>
+          membership.groupId === groupId &&
+          membership.playerId === playerId,
+      ) ?? null
+    );
+  }
+
+  getMemberRole(groupId, playerId) {
+    if (this.getGroupById(groupId)?.ownerUserId === playerId) {
+      return "organizer";
+    }
+
+    return this.getMembership(groupId, playerId)?.role ?? "member";
   }
 
   isPlayerInGroup(playerId, groupId) {
@@ -374,7 +396,15 @@ export class SupabaseFuteMatchRepository {
   }
 
   isGroupOrganizer(groupId, userId) {
-    return this.getGroupById(groupId)?.ownerUserId === userId;
+    if (!userId) return false;
+
+    const group = this.getGroupById(groupId);
+    if (group?.ownerUserId === userId) return true;
+
+    const membership = this.getMembership(groupId, userId);
+    return Boolean(
+      membership?.active === true && membership.role === "organizer",
+    );
   }
 
   async createGroup({ name, weekday, startTime, endTime }) {
@@ -411,6 +441,64 @@ export class SupabaseFuteMatchRepository {
     return this.getGroupById(groupId);
   }
 
+  async setGroupActive(groupId, active) {
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode alterar o status da patota.");
+    }
+
+    const { data, error } = await this.client
+      .from("groups")
+      .update({
+        active: Boolean(active),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", groupId)
+      .select("id, active")
+      .maybeSingle();
+
+    throwIfError(error);
+
+    if (!data) {
+      throw new Error("Patota não encontrada ou sem permissão.");
+    }
+
+    await this.sync();
+
+    if (!active && this.currentGroupId === groupId) {
+      const nextGroup = this.getGroupsForUser(this.user?.id).find(
+        (group) => group.id !== groupId,
+      );
+      this.setCurrentGroup(nextGroup?.id ?? null);
+    }
+
+    return this.getGroupById(groupId);
+  }
+
+  async deleteGroup(groupId) {
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode excluir a patota.");
+    }
+
+    const { data, error } = await this.client
+      .from("groups")
+      .delete()
+      .eq("id", groupId)
+      .select("id")
+      .maybeSingle();
+
+    throwIfError(error);
+
+    if (!data) {
+      throw new Error("Patota não encontrada ou sem permissão.");
+    }
+
+    if (this.currentGroupId === groupId) {
+      this.setCurrentGroup(null);
+    }
+
+    await this.sync();
+  }
+
   async addPlayerToGroup(playerId, groupId) {
     const existing = this.state.memberships.find(
       (membership) =>
@@ -423,6 +511,7 @@ export class SupabaseFuteMatchRepository {
       active: true,
       joined_at: new Date().toISOString(),
       left_at: null,
+      role: "member",
     };
 
     const query = existing
@@ -436,6 +525,43 @@ export class SupabaseFuteMatchRepository {
     const { error } = await query;
     throwIfError(error);
     await this.sync();
+  }
+
+  async updateGroupMemberRole(groupId, playerId, role) {
+    if (!["member", "organizer"].includes(role)) {
+      throw new Error("Cargo inválido.");
+    }
+
+    const group = this.getGroupById(groupId);
+    if (!group) {
+      throw new Error("Patota não encontrada.");
+    }
+
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente um organizador pode alterar cargos.");
+    }
+
+    if (group.ownerUserId === playerId && role !== "organizer") {
+      throw new Error("O criador da patota deve permanecer como organizador.");
+    }
+
+    const { data, error } = await this.client
+      .from("group_members")
+      .update({ role })
+      .eq("group_id", groupId)
+      .eq("user_id", playerId)
+      .eq("active", true)
+      .select("group_id, user_id, role")
+      .maybeSingle();
+
+    throwIfError(error);
+
+    if (!data) {
+      throw new Error("Atleta não encontrado na patota.");
+    }
+
+    await this.sync();
+    return this.getMembership(groupId, playerId);
   }
 
   async removePlayerFromGroup(playerId, groupId) {
