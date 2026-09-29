@@ -390,7 +390,9 @@ export class FuteMatchRepository {
       (event) => event.groupId !== groupId,
     );
     state.attendances = state.attendances.filter(
-      (attendance) => attendance.groupId !== groupId,
+      (attendance) =>
+        attendance.groupId !== groupId &&
+        !sessionIds.has(attendance.sessionId),
     );
     state.memberships = state.memberships.filter(
       (membership) => membership.groupId !== groupId,
