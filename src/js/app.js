@@ -25,7 +25,7 @@ const elements = {
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
-  resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
+  resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), resultsDescription: $("#results-description"), pairResultsList: $("#pair-results-list"), manualPairPanel: $("#manual-pair-panel"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
   rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
 };
 
@@ -334,7 +334,7 @@ const renderBarbecue = () => {
 
         return `<article class="barbecue-card"><div class="barbecue-card__head"><div><span class="section-kicker">${escapeHtml(group?.name ?? "Patota")}</span><h3>🔥 ${formatDate(event.date)}</h3></div><span class="meta-chip">${availabilityText}</span></div><p>Ficar no churrasco vale <strong>+4 pontos</strong>.</p>${
           confirmationOpen
-            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button button--ghost ${notGoing ? "is-selected" : ""}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
+            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button ${notGoing ? "button--danger is-selected" : "button--ghost"}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
             : `<div class="barbecue-locked">A confirmação ficará disponível 7 dias antes.</div>`
         }</article>`;
       })
@@ -400,18 +400,52 @@ const updateSelectionSummary = () => {
   elements.drawButton.disabled = !valid;
 };
 
+const getSavedPairs = (groupId, date) => {
+  const byId = new Map(
+    repository
+      .getPlayersByGroup(groupId, { includeInactive: true })
+      .map((player) => [player.id, player]),
+  );
+
+  return repository
+    .getPairResults(groupId, date)
+    .map((result) => ({
+      leftPlayer: byId.get(result.leftPlayerId),
+      rightPlayer: byId.get(result.rightPlayerId),
+    }))
+    .filter((pair) => pair.leftPlayer && pair.rightPlayer);
+};
+
 const renderDraw = () => {
   const groups = myGroups();
-  const selectedId = groupOptions(elements.drawGroupSelect, groups, elements.drawGroupSelect.value || repository.getCurrentGroupId());
-  drawView.clearResults(); drawView.clearError();
-  if (!selectedId) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = '<strong>Você ainda não possui patotas para sortear.</strong>'; return; }
+  const selectedId = groupOptions(
+    elements.drawGroupSelect,
+    groups,
+    elements.drawGroupSelect.value || repository.getCurrentGroupId(),
+  );
+
+  drawView.clearResults();
+  drawView.clearError();
+
+  if (!selectedId) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Você ainda não possui patotas.</strong>';
+    return;
+  }
+
   repository.setCurrentGroup(selectedId);
-  const players = repository.getPlayersByGroup(selectedId);
-  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
-  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
-  if (left.length < 2 || right.length < 2) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = `<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>`; return; }
-  elements.drawEmpty.classList.add("is-hidden"); elements.drawContent.classList.remove("is-hidden");
-  const attendanceWindow = repository.getAttendanceWindow(selectedId, today());
+
+  const group = repository.getGroupById(selectedId);
+  const isOwner = repository.isGroupOrganizer(
+    selectedId,
+    currentAccount()?.id,
+  );
+  const attendanceWindow = repository.getAttendanceWindow(
+    selectedId,
+    today(),
+  );
 
   if (!attendanceWindow.available) {
     elements.drawEmpty.classList.remove("is-hidden");
@@ -420,6 +454,51 @@ const renderDraw = () => {
       '<strong>Dia da semana não definido</strong><span>O organizador precisa configurar o dia da patota antes do sorteio.</span>';
     return;
   }
+
+  const savedPairs = getSavedPairs(
+    selectedId,
+    attendanceWindow.targetDate,
+  );
+
+  if (!isOwner) {
+    elements.drawForm.classList.add("is-hidden");
+    elements.redrawButton.classList.add("is-hidden");
+
+    if (!savedPairs.length) {
+      elements.drawEmpty.classList.remove("is-hidden");
+      elements.drawContent.classList.add("is-hidden");
+      elements.drawEmpty.innerHTML =
+        `<strong>Sorteio ainda não realizado</strong><span>O organizador da ${escapeHtml(group?.name ?? "patota")} ainda não definiu as duplas para ${formatDate(attendanceWindow.targetDate)}.</span>`;
+      return;
+    }
+
+    elements.drawEmpty.classList.add("is-hidden");
+    elements.drawContent.classList.remove("is-hidden");
+    drawView.renderPairs(savedPairs, { scroll: false });
+    return;
+  }
+
+  elements.drawForm.classList.remove("is-hidden");
+  elements.redrawButton.classList.remove("is-hidden");
+
+  const players = repository.getPlayersByGroup(selectedId);
+  const left = players.filter(
+    (player) => player.side === PLAYER_SIDE.LEFT,
+  );
+  const right = players.filter(
+    (player) => player.side === PLAYER_SIDE.RIGHT,
+  );
+
+  if (left.length < 2 || right.length < 2) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>';
+    return;
+  }
+
+  elements.drawEmpty.classList.add("is-hidden");
+  elements.drawContent.classList.remove("is-hidden");
 
   const attendance = repository.getAttendance(
     selectedId,
@@ -431,9 +510,29 @@ const renderDraw = () => {
       .filter((item) => item.status === "present")
       .map((item) => item.playerId),
   );
-  elements.leftPlayerOptions.innerHTML = left.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
-  elements.rightPlayerOptions.innerHTML = right.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
+
+  elements.leftPlayerOptions.innerHTML = left
+    .map((player) =>
+      playerOption(
+        player,
+        hasResponses ? presentIds.has(player.id) : true,
+      ),
+    )
+    .join("");
+  elements.rightPlayerOptions.innerHTML = right
+    .map((player) =>
+      playerOption(
+        player,
+        hasResponses ? presentIds.has(player.id) : true,
+      ),
+    )
+    .join("");
+
   updateSelectionSummary();
+
+  if (savedPairs.length) {
+    drawView.renderPairs(savedPairs, { scroll: false });
+  }
 };
 
 const getSelectedPlayers = () => {
@@ -446,10 +545,15 @@ const getSelectedPlayers = () => {
 const handleDraw = async () => {
   try {
     drawView.clearError();
+
+    const groupId = elements.drawGroupSelect.value;
+    if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+      throw new Error("Somente o organizador pode realizar o sorteio.");
+    }
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
     const attendanceWindow = repository.getAttendanceWindow(
-      elements.drawGroupSelect.value,
+      groupId,
       today(),
     );
 
@@ -458,7 +562,7 @@ const handleDraw = async () => {
     }
 
     await repository.saveDrawPairs(
-      elements.drawGroupSelect.value,
+      groupId,
       attendanceWindow.targetDate,
       pairs,
     );
@@ -469,18 +573,80 @@ const handleDraw = async () => {
 
 const renderResults = () => {
   const groups = myGroups();
-  const groupId = groupOptions(elements.resultsGroupSelect, groups, elements.resultsGroupSelect.value || repository.getCurrentGroupId());
-  if (!elements.resultsDate.value) elements.resultsDate.value = today();
-  if (!groupId) { elements.pairResultsList.innerHTML = '<div class="empty-state"><span>Nenhuma patota disponível.</span></div>'; return; }
+  const groupId = groupOptions(
+    elements.resultsGroupSelect,
+    groups,
+    elements.resultsGroupSelect.value || repository.getCurrentGroupId(),
+  );
+
+  if (!elements.resultsDate.value) {
+    elements.resultsDate.value = today();
+  }
+
+  if (!groupId) {
+    elements.pairResultsList.innerHTML =
+      '<div class="empty-state"><span>Nenhuma patota disponível.</span></div>';
+    elements.manualPairPanel.classList.add("is-hidden");
+    return;
+  }
+
+  const isOwner = repository.isGroupOrganizer(
+    groupId,
+    currentAccount()?.id,
+  );
   const date = elements.resultsDate.value;
-  const players = repository.getPlayersByGroup(groupId);
-  const byId = new Map(players.map((player) => [player.id, player]));
+  const players = repository.getPlayersByGroup(groupId, {
+    includeInactive: true,
+  });
+  const byId = new Map(
+    players.map((player) => [player.id, player]),
+  );
   const results = repository.getPairResults(groupId, date);
-  elements.pairResultsList.innerHTML = results.length ? results.map((result) => `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div><label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label></div>`).join("") : '<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>Faça o sorteio ou adicione uma dupla manualmente.</span></div>';
-  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
-  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
-  elements.manualLeftPlayer.innerHTML = left.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  elements.manualRightPlayer.innerHTML = right.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+
+  elements.resultsDescription.innerHTML = isOwner
+    ? 'Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.'
+    : 'Visualização dos resultados lançados pelo organizador. Cada vitória vale <strong>1 ponto para cada atleta</strong>.';
+
+  elements.manualPairPanel.classList.toggle("is-hidden", !isOwner);
+
+  elements.pairResultsList.innerHTML = results.length
+    ? results
+        .map(
+          (result) =>
+            `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div>${
+              isOwner
+                ? `<label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label>`
+                : `<div class="win-readonly"><strong>${result.wins}</strong><span>${Number(result.wins) === 1 ? "vitória" : "vitórias"}</span></div>`
+            }</div>`,
+        )
+        .join("")
+    : `<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>${
+        isOwner
+          ? "Faça o sorteio ou adicione uma dupla manualmente."
+          : "O organizador ainda não lançou resultados para esta data."
+      }</span></div>`;
+
+  if (!isOwner) return;
+
+  const left = players.filter(
+    (player) => player.side === PLAYER_SIDE.LEFT,
+  );
+  const right = players.filter(
+    (player) => player.side === PLAYER_SIDE.RIGHT,
+  );
+
+  elements.manualLeftPlayer.innerHTML = left
+    .map(
+      (player) =>
+        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
+    )
+    .join("");
+  elements.manualRightPlayer.innerHTML = right
+    .map(
+      (player) =>
+        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
+    )
+    .join("");
 };
 
 const rankingRows = (items) => items.length ? items.map((item, index) => `<div class="ranking-row"><span class="ranking-position">${index + 1}</span><div class="ranking-athlete"><strong>${escapeHtml(item.player.name)}</strong><small>${item.wins} vitórias • ${item.nights} presenças • ${item.barbecues} churrascos</small></div><div class="ranking-score"><strong>${item.totalPoints}</strong><small>pontos</small></div></div>`).join("") : '<div class="empty-state"><span>Ainda não há pontuação.</span></div>';
