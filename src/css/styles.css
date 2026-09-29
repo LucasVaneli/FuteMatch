@@ -82,7 +82,7 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
 
   .member-remove-button {
     width: 100%;
-    margin-left: 50px;
+    margin-left: 0;
   }
 }
 
