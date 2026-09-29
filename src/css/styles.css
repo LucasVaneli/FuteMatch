@@ -9,7 +9,7 @@ button,input,select{font:inherit} button{cursor:pointer} button:disabled{cursor:
 .eyebrow,.section-kicker{color:var(--primary);font-size:.72rem;font-weight:800;letter-spacing:.15em}.muted{color:var(--muted)}
 .auth-screen{width:min(1120px,calc(100% - 32px));min-height:100vh;margin:auto;display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center;padding:48px 0}
 .auth-brand h1{margin:12px 0 18px;font-size:clamp(3rem,7vw,6rem);line-height:.92;letter-spacing:-.065em}.auth-brand p{max-width:620px;color:var(--muted);font-size:1.05rem;line-height:1.7}
-.auth-points,.score-rules{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}.auth-points span,.score-rules span,.meta-chip{border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.035);padding:9px 12px;color:var(--muted);font-size:.8rem}
+.score-rules{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}.score-rules span,.meta-chip{border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.035);padding:9px 12px;color:var(--muted);font-size:.8rem}
 .auth-card,.panel,.group-card,.attendance-card,.ranking-board,.results-section,.narrow-panel{border:1px solid var(--border);border-radius:var(--radius-lg);background:rgba(13,27,45,.93);box-shadow:var(--shadow)}
 .auth-card{padding:22px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;border:1px solid var(--border);border-radius:999px;background:rgba(3,10,18,.35)}
 .auth-tab{min-height:42px;border:0;border-radius:999px;background:transparent;color:var(--muted);font-weight:800}.auth-tab.is-active{background:rgba(255,207,51,.12);color:var(--primary)}
@@ -213,4 +213,40 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
   color: var(--muted);
   background: rgba(255, 255, 255, .02);
   font-size: .78rem;
+}
+
+
+.form-success {
+  min-height: 18px;
+  margin: 0;
+  color: var(--success);
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+
+/* Estados de confirmação e visualização */
+.barbecue-actions .button--danger.is-selected {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  box-shadow: none;
+}
+
+.win-readonly {
+  display: grid;
+  min-width: 76px;
+  justify-items: end;
+  gap: 2px;
+}
+
+.win-readonly strong {
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.win-readonly span {
+  color: var(--muted);
+  font-size: .7rem;
 }

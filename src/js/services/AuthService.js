@@ -1,52 +1,76 @@
-const encodeHex = (buffer) =>
-  [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-
-const hashPassword = async (password) => {
-  if (!password || password.length < 6) {
-    throw new Error("A senha precisa ter pelo menos 6 caracteres.");
-  }
-
-  if (!globalThis.crypto?.subtle) {
-    return `demo:${password}`;
-  }
-
-  const data = new TextEncoder().encode(password);
-  return encodeHex(await globalThis.crypto.subtle.digest("SHA-256", data));
-};
-
 export class AuthService {
-  constructor(repository) {
+  constructor(client, repository) {
+    this.client = client;
     this.repository = repository;
   }
 
   async register({ email, password, name, birthDate, side }) {
-    const passwordHash = await hashPassword(password);
-    return this.repository.createAccount({
-      email,
-      passwordHash,
-      name,
-      birthDate,
-      side,
+    if (!password || password.length < 6) {
+      throw new Error("A senha precisa ter pelo menos 6 caracteres.");
+    }
+
+    const redirectTo = new URL(
+      "./",
+      globalThis.location?.href ?? "http://localhost:5500/",
+    ).href;
+
+    const { data, error } = await this.client.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: redirectTo,
+        data: {
+          full_name: name.trim(),
+          birth_date: birthDate,
+          side,
+        },
+      },
     });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data.session) {
+      return {
+        requiresEmailConfirmation: true,
+        email: data.user?.email ?? email.trim(),
+      };
+    }
+
+    this.repository.setAuthenticatedUser(data.user);
+    await this.repository.sync();
+
+    return {
+      requiresEmailConfirmation: false,
+      account: this.repository.getCurrentAccount(),
+    };
   }
 
   async login(email, password) {
-    const account = this.repository.getAccountByEmail(email);
-    if (!account || account.active === false) {
+    const { data, error } = await this.client.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error) {
       throw new Error("E-mail ou senha inválidos.");
     }
 
-    const passwordHash = await hashPassword(password);
-    if (passwordHash !== account.passwordHash) {
-      throw new Error("E-mail ou senha inválidos.");
-    }
+    this.repository.setAuthenticatedUser(data.user);
+    await this.repository.sync();
 
-    this.repository.setCurrentUser(account.id);
-    return account;
+    return this.repository.getCurrentAccount();
   }
 
-  logout() {
-    this.repository.signOut();
+  async logout() {
+    const { error } = await this.client.auth.signOut();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    this.repository.setAuthenticatedUser(null);
   }
 
   getCurrentAccount() {

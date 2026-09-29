@@ -13,7 +13,7 @@ export class DrawView {
     this.playerInputs = playerInputs;
   }
 
-  renderPairs(pairs) {
+  renderPairs(pairs, { scroll = true } = {}) {
     this.pairsList.replaceChildren();
 
     pairs.forEach((pair, index) => {
@@ -25,7 +25,13 @@ export class DrawView {
     });
 
     this.resultsSection.classList.remove("is-hidden");
-    this.resultsSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+    if (scroll) {
+      this.resultsSection.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
   }
 
   showError(message) {

@@ -16,11 +16,6 @@
       <span class="eyebrow">FUTEMATCH</span>
       <h1>Seu fute.<br />Sua patota.<br />Seu ranking.</h1>
       <p>Entre para acompanhar suas patotas, confirmar presença e disputar o ranking da galera.</p>
-      <div class="auth-points">
-        <span>✓ Presença vale 2 pontos</span>
-        <span>✓ Cada vitória vale 1 ponto</span>
-        <span>✓ Churrasco vale 4 pontos 😄</span>
-      </div>
     </div>
 
     <article class="auth-card">
@@ -52,7 +47,8 @@
           <label><span>Lado que joga</span><select id="register-side" required><option value="">Selecione</option><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
         </div>
         <label><span>Senha</span><input id="register-password" type="password" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres" required /></label>
-        <p class="form-hint">Nesta versão de demonstração, a conta fica salva apenas neste navegador. O login real será conectado ao Supabase depois.</p>
+        <p class="form-hint">Sua conta e seus dados ficam sincronizados no Supabase para você acessar pelo celular ou computador.</p>
+        <p id="register-message" class="form-success" role="status"></p>
         <p id="register-error" class="form-error" role="alert"></p>
         <button class="button button--primary button--full" type="submit">Criar minha conta</button>
       </form>
@@ -201,10 +197,10 @@
       </section>
 
       <section class="page is-hidden" data-page-section="results">
-        <div class="page-heading"><div><span class="section-kicker">RESULTADOS</span><h1>Resultados da noite</h1><p>Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.</p></div><div class="heading-controls"><select id="results-group-select" class="page-select"></select><input id="results-date" class="page-date" type="date" /></div></div>
+        <div class="page-heading"><div><span class="section-kicker">RESULTADOS</span><h1>Resultados da noite</h1><p id="results-description">Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.</p></div><div class="heading-controls"><select id="results-group-select" class="page-select"></select><input id="results-date" class="page-date" type="date" /></div></div>
         <div class="content-grid content-grid--results">
           <article class="panel"><div class="panel-heading"><div><span class="section-kicker">DUPLAS</span><h2>Vitórias</h2></div></div><div id="pair-results-list" class="pair-results-list"></div></article>
-          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ADICIONAR</span><h2>Registrar outra dupla</h2></div></div><form id="manual-pair-form" class="form-stack"><label><span>Esquerda</span><select id="manual-left-player"></select></label><label><span>Direita</span><select id="manual-right-player"></select></label><label><span>Vitórias</span><input id="manual-wins" type="number" min="0" value="0" /></label><p id="manual-pair-error" class="form-error"></p><button class="button button--secondary" type="submit">Adicionar dupla</button></form></article>
+          <article id="manual-pair-panel" class="panel"><div class="panel-heading"><div><span class="section-kicker">ADICIONAR</span><h2>Registrar outra dupla</h2></div></div><form id="manual-pair-form" class="form-stack"><label><span>Esquerda</span><select id="manual-left-player"></select></label><label><span>Direita</span><select id="manual-right-player"></select></label><label><span>Vitórias</span><input id="manual-wins" type="number" min="0" value="0" /></label><p id="manual-pair-error" class="form-error"></p><button class="button button--secondary" type="submit">Adicionar dupla</button></form></article>
         </div>
       </section>
 

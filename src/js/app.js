@@ -2,12 +2,13 @@ import { GROUP_WEEKDAY_LABEL } from "./domain/Group.js";
 import { PLAYER_SIDE } from "./domain/Player.js";
 import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
-import { FuteMatchRepository } from "./services/FuteMatchRepository.js";
+import { SupabaseFuteMatchRepository } from "./services/SupabaseFuteMatchRepository.js";
 import { RankingService } from "./services/RankingService.js";
 import { DrawView } from "./ui/DrawView.js";
+import { supabase } from "./supabaseClient.js";
 
-const repository = new FuteMatchRepository();
-const authService = new AuthService(repository);
+const repository = new SupabaseFuteMatchRepository(supabase);
+const authService = new AuthService(supabase, repository);
 let toastTimer;
 
 const $ = (selector) => document.querySelector(selector);
@@ -16,7 +17,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const elements = {
   authScreen: $("#auth-screen"), app: $("#app"), authTabs: $$("[data-auth-tab]"),
   loginForm: $("#login-form"), loginEmail: $("#login-email"), loginPassword: $("#login-password"), loginError: $("#login-error"),
-  registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"),
+  registerForm: $("#register-form"), registerName: $("#register-name"), registerEmail: $("#register-email"), registerBirthDate: $("#register-birth-date"), registerSide: $("#register-side"), registerPassword: $("#register-password"), registerError: $("#register-error"), registerMessage: $("#register-message"),
   sidebar: $(".sidebar"), mobileMenuButton: $("#mobile-menu-button"), navItems: $$("[data-page]"), pages: $$("[data-page-section]"), goToButtons: $$("[data-go-to]"),
   profileAvatar: $("#profile-avatar"), profileName: $("#profile-name"), profileSide: $("#profile-side"), logoutButton: $("#logout-button"), welcomeTitle: $("#welcome-title"),
   myGroupsList: $("#my-groups-list"), groupForm: $("#group-form"), groupName: $("#group-name"), groupWeekday: $("#group-weekday"), groupStartTime: $("#group-start-time"), groupEndTime: $("#group-end-time"), groupError: $("#group-error"),
@@ -24,7 +25,7 @@ const elements = {
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
-  resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), pairResultsList: $("#pair-results-list"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
+  resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), resultsDescription: $("#results-description"), pairResultsList: $("#pair-results-list"), manualPairPanel: $("#manual-pair-panel"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
   rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
 };
 
@@ -94,6 +95,18 @@ const showPage = (name) => {
   if (name === "results") renderResults();
   if (name === "ranking") renderRanking();
   window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
+const navigateTo = async (name) => {
+  try {
+    if (currentAccount()) {
+      await repository.sync();
+    }
+  } catch (error) {
+    showToast("Não foi possível atualizar os dados agora.");
+  }
+
+  showPage(name);
 };
 
 const showAuthTab = (tab) => {
@@ -321,7 +334,7 @@ const renderBarbecue = () => {
 
         return `<article class="barbecue-card"><div class="barbecue-card__head"><div><span class="section-kicker">${escapeHtml(group?.name ?? "Patota")}</span><h3>🔥 ${formatDate(event.date)}</h3></div><span class="meta-chip">${availabilityText}</span></div><p>Ficar no churrasco vale <strong>+4 pontos</strong>.</p>${
           confirmationOpen
-            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button button--ghost ${notGoing ? "is-selected" : ""}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
+            ? `<div class="barbecue-actions"><button class="button button--success ${going ? "is-selected" : ""}" type="button" data-barbecue-response="going" data-barbecue-event="${event.id}">✓ Vou ficar</button><button class="button ${notGoing ? "button--danger is-selected" : "button--ghost"}" type="button" data-barbecue-response="not_going" data-barbecue-event="${event.id}">Não vou ficar</button></div>`
             : `<div class="barbecue-locked">A confirmação ficará disponível 7 dias antes.</div>`
         }</article>`;
       })
@@ -387,18 +400,52 @@ const updateSelectionSummary = () => {
   elements.drawButton.disabled = !valid;
 };
 
+const getSavedPairs = (groupId, date) => {
+  const byId = new Map(
+    repository
+      .getPlayersByGroup(groupId, { includeInactive: true })
+      .map((player) => [player.id, player]),
+  );
+
+  return repository
+    .getPairResults(groupId, date)
+    .map((result) => ({
+      leftPlayer: byId.get(result.leftPlayerId),
+      rightPlayer: byId.get(result.rightPlayerId),
+    }))
+    .filter((pair) => pair.leftPlayer && pair.rightPlayer);
+};
+
 const renderDraw = () => {
   const groups = myGroups();
-  const selectedId = groupOptions(elements.drawGroupSelect, groups, elements.drawGroupSelect.value || repository.getCurrentGroupId());
-  drawView.clearResults(); drawView.clearError();
-  if (!selectedId) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = '<strong>Você ainda não possui patotas para sortear.</strong>'; return; }
+  const selectedId = groupOptions(
+    elements.drawGroupSelect,
+    groups,
+    elements.drawGroupSelect.value || repository.getCurrentGroupId(),
+  );
+
+  drawView.clearResults();
+  drawView.clearError();
+
+  if (!selectedId) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Você ainda não possui patotas.</strong>';
+    return;
+  }
+
   repository.setCurrentGroup(selectedId);
-  const players = repository.getPlayersByGroup(selectedId);
-  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
-  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
-  if (left.length < 2 || right.length < 2) { elements.drawEmpty.classList.remove("is-hidden"); elements.drawContent.classList.add("is-hidden"); elements.drawEmpty.innerHTML = `<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>`; return; }
-  elements.drawEmpty.classList.add("is-hidden"); elements.drawContent.classList.remove("is-hidden");
-  const attendanceWindow = repository.getAttendanceWindow(selectedId, today());
+
+  const group = repository.getGroupById(selectedId);
+  const isOwner = repository.isGroupOrganizer(
+    selectedId,
+    currentAccount()?.id,
+  );
+  const attendanceWindow = repository.getAttendanceWindow(
+    selectedId,
+    today(),
+  );
 
   if (!attendanceWindow.available) {
     elements.drawEmpty.classList.remove("is-hidden");
@@ -407,6 +454,51 @@ const renderDraw = () => {
       '<strong>Dia da semana não definido</strong><span>O organizador precisa configurar o dia da patota antes do sorteio.</span>';
     return;
   }
+
+  const savedPairs = getSavedPairs(
+    selectedId,
+    attendanceWindow.targetDate,
+  );
+
+  if (!isOwner) {
+    elements.drawForm.classList.add("is-hidden");
+    elements.redrawButton.classList.add("is-hidden");
+
+    if (!savedPairs.length) {
+      elements.drawEmpty.classList.remove("is-hidden");
+      elements.drawContent.classList.add("is-hidden");
+      elements.drawEmpty.innerHTML =
+        `<strong>Sorteio ainda não realizado</strong><span>O organizador da ${escapeHtml(group?.name ?? "patota")} ainda não definiu as duplas para ${formatDate(attendanceWindow.targetDate)}.</span>`;
+      return;
+    }
+
+    elements.drawEmpty.classList.add("is-hidden");
+    elements.drawContent.classList.remove("is-hidden");
+    drawView.renderPairs(savedPairs, { scroll: false });
+    return;
+  }
+
+  elements.drawForm.classList.remove("is-hidden");
+  elements.redrawButton.classList.remove("is-hidden");
+
+  const players = repository.getPlayersByGroup(selectedId);
+  const left = players.filter(
+    (player) => player.side === PLAYER_SIDE.LEFT,
+  );
+  const right = players.filter(
+    (player) => player.side === PLAYER_SIDE.RIGHT,
+  );
+
+  if (left.length < 2 || right.length < 2) {
+    elements.drawEmpty.classList.remove("is-hidden");
+    elements.drawContent.classList.add("is-hidden");
+    elements.drawEmpty.innerHTML =
+      '<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>';
+    return;
+  }
+
+  elements.drawEmpty.classList.add("is-hidden");
+  elements.drawContent.classList.remove("is-hidden");
 
   const attendance = repository.getAttendance(
     selectedId,
@@ -418,9 +510,29 @@ const renderDraw = () => {
       .filter((item) => item.status === "present")
       .map((item) => item.playerId),
   );
-  elements.leftPlayerOptions.innerHTML = left.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
-  elements.rightPlayerOptions.innerHTML = right.map((player) => playerOption(player, hasResponses ? presentIds.has(player.id) : true)).join("");
+
+  elements.leftPlayerOptions.innerHTML = left
+    .map((player) =>
+      playerOption(
+        player,
+        hasResponses ? presentIds.has(player.id) : true,
+      ),
+    )
+    .join("");
+  elements.rightPlayerOptions.innerHTML = right
+    .map((player) =>
+      playerOption(
+        player,
+        hasResponses ? presentIds.has(player.id) : true,
+      ),
+    )
+    .join("");
+
   updateSelectionSummary();
+
+  if (savedPairs.length) {
+    drawView.renderPairs(savedPairs, { scroll: false });
+  }
 };
 
 const getSelectedPlayers = () => {
@@ -430,14 +542,18 @@ const getSelectedPlayers = () => {
   return { leftPlayers: selected.filter((player) => player.side === PLAYER_SIDE.LEFT), rightPlayers: selected.filter((player) => player.side === PLAYER_SIDE.RIGHT) };
 };
 
-const handleDraw = () => {
+const handleDraw = async () => {
   try {
     drawView.clearError();
+
+    const groupId = elements.drawGroupSelect.value;
+    if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+      throw new Error("Somente o organizador pode realizar o sorteio.");
+    }
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
-    drawView.renderPairs(pairs);
     const attendanceWindow = repository.getAttendanceWindow(
-      elements.drawGroupSelect.value,
+      groupId,
       today(),
     );
 
@@ -445,29 +561,92 @@ const handleDraw = () => {
       throw new Error(attendanceWindow.reason);
     }
 
-    repository.saveDrawPairs(
-      elements.drawGroupSelect.value,
+    await repository.saveDrawPairs(
+      groupId,
       attendanceWindow.targetDate,
       pairs,
     );
+    drawView.renderPairs(pairs);
     showToast("Duplas salvas para os resultados da noite.");
   } catch (error) { drawView.showError(error.message); }
 };
 
 const renderResults = () => {
   const groups = myGroups();
-  const groupId = groupOptions(elements.resultsGroupSelect, groups, elements.resultsGroupSelect.value || repository.getCurrentGroupId());
-  if (!elements.resultsDate.value) elements.resultsDate.value = today();
-  if (!groupId) { elements.pairResultsList.innerHTML = '<div class="empty-state"><span>Nenhuma patota disponível.</span></div>'; return; }
+  const groupId = groupOptions(
+    elements.resultsGroupSelect,
+    groups,
+    elements.resultsGroupSelect.value || repository.getCurrentGroupId(),
+  );
+
+  if (!elements.resultsDate.value) {
+    elements.resultsDate.value = today();
+  }
+
+  if (!groupId) {
+    elements.pairResultsList.innerHTML =
+      '<div class="empty-state"><span>Nenhuma patota disponível.</span></div>';
+    elements.manualPairPanel.classList.add("is-hidden");
+    return;
+  }
+
+  const isOwner = repository.isGroupOrganizer(
+    groupId,
+    currentAccount()?.id,
+  );
   const date = elements.resultsDate.value;
-  const players = repository.getPlayersByGroup(groupId);
-  const byId = new Map(players.map((player) => [player.id, player]));
+  const players = repository.getPlayersByGroup(groupId, {
+    includeInactive: true,
+  });
+  const byId = new Map(
+    players.map((player) => [player.id, player]),
+  );
   const results = repository.getPairResults(groupId, date);
-  elements.pairResultsList.innerHTML = results.length ? results.map((result) => `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div><label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label></div>`).join("") : '<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>Faça o sorteio ou adicione uma dupla manualmente.</span></div>';
-  const left = players.filter((player) => player.side === PLAYER_SIDE.LEFT);
-  const right = players.filter((player) => player.side === PLAYER_SIDE.RIGHT);
-  elements.manualLeftPlayer.innerHTML = left.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
-  elements.manualRightPlayer.innerHTML = right.map((player) => `<option value="${player.id}">${escapeHtml(player.name)}</option>`).join("");
+
+  elements.resultsDescription.innerHTML = isOwner
+    ? 'Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.'
+    : 'Visualização dos resultados lançados pelo organizador. Cada vitória vale <strong>1 ponto para cada atleta</strong>.';
+
+  elements.manualPairPanel.classList.toggle("is-hidden", !isOwner);
+
+  elements.pairResultsList.innerHTML = results.length
+    ? results
+        .map(
+          (result) =>
+            `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div>${
+              isOwner
+                ? `<label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label>`
+                : `<div class="win-readonly"><strong>${result.wins}</strong><span>${Number(result.wins) === 1 ? "vitória" : "vitórias"}</span></div>`
+            }</div>`,
+        )
+        .join("")
+    : `<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>${
+        isOwner
+          ? "Faça o sorteio ou adicione uma dupla manualmente."
+          : "O organizador ainda não lançou resultados para esta data."
+      }</span></div>`;
+
+  if (!isOwner) return;
+
+  const left = players.filter(
+    (player) => player.side === PLAYER_SIDE.LEFT,
+  );
+  const right = players.filter(
+    (player) => player.side === PLAYER_SIDE.RIGHT,
+  );
+
+  elements.manualLeftPlayer.innerHTML = left
+    .map(
+      (player) =>
+        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
+    )
+    .join("");
+  elements.manualRightPlayer.innerHTML = right
+    .map(
+      (player) =>
+        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
+    )
+    .join("");
 };
 
 const rankingRows = (items) => items.length ? items.map((item, index) => `<div class="ranking-row"><span class="ranking-position">${index + 1}</span><div class="ranking-athlete"><strong>${escapeHtml(item.player.name)}</strong><small>${item.wins} vitórias • ${item.nights} presenças • ${item.barbecues} churrascos</small></div><div class="ranking-score"><strong>${item.totalPoints}</strong><small>pontos</small></div></div>`).join("") : '<div class="empty-state"><span>Ainda não há pontuação.</span></div>';
@@ -492,17 +671,95 @@ const enterAuth = () => { elements.app.classList.add("is-hidden"); elements.auth
 
 // Auth
 elements.authTabs.forEach((button) => button.addEventListener("click", () => showAuthTab(button.dataset.authTab)));
-elements.loginForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.loginError.textContent = ""; try { await authService.login(elements.loginEmail.value, elements.loginPassword.value); elements.loginForm.reset(); enterApp(); } catch (error) { elements.loginError.textContent = error.message; } });
-elements.registerForm.addEventListener("submit", async (event) => { event.preventDefault(); elements.registerError.textContent = ""; try { await authService.register({ email: elements.registerEmail.value, password: elements.registerPassword.value, name: elements.registerName.value, birthDate: elements.registerBirthDate.value, side: elements.registerSide.value }); elements.registerForm.reset(); enterApp(); showToast("Conta criada. Bem-vindo ao FuteMatch!"); } catch (error) { elements.registerError.textContent = error.message; } });
-elements.logoutButton.addEventListener("click", () => { authService.logout(); enterAuth(); });
+elements.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.loginError.textContent = "";
+
+  try {
+    await authService.login(
+      elements.loginEmail.value,
+      elements.loginPassword.value,
+    );
+    elements.loginForm.reset();
+    enterApp();
+  } catch (error) {
+    elements.loginError.textContent = error.message;
+  }
+});
+
+elements.registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.registerError.textContent = "";
+  elements.registerMessage.textContent = "";
+
+  try {
+    const result = await authService.register({
+      email: elements.registerEmail.value,
+      password: elements.registerPassword.value,
+      name: elements.registerName.value,
+      birthDate: elements.registerBirthDate.value,
+      side: elements.registerSide.value,
+    });
+
+    if (result.requiresEmailConfirmation) {
+      elements.registerMessage.textContent =
+        "Conta criada. Confira seu e-mail para confirmar o cadastro e depois faça login.";
+      elements.registerPassword.value = "";
+      return;
+    }
+
+    elements.registerForm.reset();
+    enterApp();
+    showToast("Conta criada. Bem-vindo ao FuteMatch!");
+  } catch (error) {
+    elements.registerError.textContent = error.message;
+  }
+});
+
+elements.logoutButton.addEventListener("click", async () => {
+  try {
+    await authService.logout();
+    enterAuth();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 
 // Navigation
-elements.navItems.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.page)));
-elements.goToButtons.forEach((button) => button.addEventListener("click", () => showPage(button.dataset.goTo)));
+elements.navItems.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.page);
+  }),
+);
+elements.goToButtons.forEach((button) =>
+  button.addEventListener("click", async () => {
+    await navigateTo(button.dataset.goTo);
+  }),
+);
 elements.mobileMenuButton.addEventListener("click", () => elements.sidebar.classList.toggle("is-open"));
 
 // Groups
-elements.groupForm.addEventListener("submit", (event) => { event.preventDefault(); elements.groupError.textContent = ""; const account = currentAccount(); const player = currentPlayer(); try { const group = repository.createGroup({ name: elements.groupName.value, weekday: elements.groupWeekday.value, startTime: elements.groupStartTime.value, endTime: elements.groupEndTime.value, ownerUserId: account.id, ownerPlayerId: player.id }); elements.groupForm.reset(); repository.setCurrentGroup(group.id); renderApp(); showPage("group-detail"); showToast(`Patota “${group.name}” criada.`); } catch (error) { elements.groupError.textContent = error.message; } });
+elements.groupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.groupError.textContent = "";
+
+  try {
+    const group = await repository.createGroup({
+      name: elements.groupName.value,
+      weekday: elements.groupWeekday.value,
+      startTime: elements.groupStartTime.value,
+      endTime: elements.groupEndTime.value,
+    });
+
+    elements.groupForm.reset();
+    repository.setCurrentGroup(group.id);
+    renderApp();
+    showPage("group-detail");
+    showToast(`Patota “${group.name}” criada.`);
+  } catch (error) {
+    elements.groupError.textContent = error.message;
+  }
+});
 elements.myGroupsList.addEventListener("click", (event) => {
   const open = event.target.closest("[data-open-group]");
   const presence = event.target.closest("[data-presence-group]");
@@ -514,12 +771,12 @@ elements.myGroupsList.addEventListener("click", (event) => {
   else showPage("attendance");
 });
 
-elements.detailScheduleForm.addEventListener("submit", (event) => {
+elements.detailScheduleForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.detailScheduleError.textContent = "";
 
   try {
-    repository.updateGroupSchedule(
+    await repository.updateGroupSchedule(
       repository.getCurrentGroupId(),
       {
         weekday: elements.detailWeekday.value,
@@ -536,7 +793,7 @@ elements.detailScheduleForm.addEventListener("submit", (event) => {
   }
 });
 
-elements.detailAddPlayerButton.addEventListener("click", () => {
+elements.detailAddPlayerButton.addEventListener("click", async () => {
   elements.detailAddPlayerError.textContent = "";
   const groupId = repository.getCurrentGroupId();
   const playerId = elements.detailAddPlayerSelect.value;
@@ -544,7 +801,11 @@ elements.detailAddPlayerButton.addEventListener("click", () => {
   if (!playerId) return;
 
   try {
-    repository.addPlayerToGroup(playerId, groupId, currentAccount()?.id);
+    await repository.addPlayerToGroup(
+      playerId,
+      groupId,
+      currentAccount()?.id,
+    );
     renderGroupDetail();
     renderMyGroups();
     showToast("Atleta adicionado à patota.");
@@ -553,7 +814,7 @@ elements.detailAddPlayerButton.addEventListener("click", () => {
   }
 });
 
-elements.detailMembers.addEventListener("click", (event) => {
+elements.detailMembers.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-player]");
   if (!button) return;
 
@@ -565,7 +826,7 @@ elements.detailMembers.addEventListener("click", (event) => {
   if (!window.confirm(`Remover ${player.name} desta patota?`)) return;
 
   try {
-    repository.removePlayerFromGroup(
+    await repository.removePlayerFromGroup(
       player.id,
       groupId,
       currentAccount()?.id,
@@ -579,34 +840,38 @@ elements.detailMembers.addEventListener("click", (event) => {
 });
 
 // Attendance
-elements.attendanceList.addEventListener("click", (event) => {
+elements.attendanceList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-attendance]");
   if (!button) return;
 
-  repository.setAttendance({
-    groupId: button.dataset.groupId,
+  try {
+    await repository.setAttendance({
+      groupId: button.dataset.groupId,
     playerId: currentPlayer().id,
     date: button.dataset.attendanceDate,
     status: button.dataset.attendance,
-    currentDate: today(),
-  });
+      currentDate: today(),
+    });
 
-  renderAttendance();
-  renderMyGroups();
-  showToast(
-    button.dataset.attendance === "present"
-      ? "Presença confirmada: +2 pontos."
-      : "Ausência registrada.",
-  );
+    renderAttendance();
+    renderMyGroups();
+    showToast(
+      button.dataset.attendance === "present"
+        ? "Presença confirmada: +2 pontos."
+        : "Ausência registrada.",
+    );
+  } catch (error) {
+    showToast(error.message);
+  }
 });
 
 // Barbecue
-elements.barbecueForm.addEventListener("submit", (event) => {
+elements.barbecueForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.barbecueError.textContent = "";
 
   try {
-    repository.scheduleBarbecue(
+    await repository.scheduleBarbecue(
       elements.barbecueGroupSelect.value,
       elements.barbecueDate.value,
       currentAccount()?.id,
@@ -618,12 +883,12 @@ elements.barbecueForm.addEventListener("submit", (event) => {
   }
 });
 
-elements.barbecueList.addEventListener("click", (event) => {
+elements.barbecueList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-barbecue-response]");
   if (!button) return;
 
   try {
-    repository.setBarbecueConfirmation({
+    await repository.setBarbecueConfirmation({
       eventId: button.dataset.barbecueEvent,
       playerId: currentPlayer().id,
       status: button.dataset.barbecueResponse,
@@ -640,14 +905,14 @@ elements.barbecueList.addEventListener("click", (event) => {
   }
 });
 
-elements.barbecueOrganizerEvents.addEventListener("click", (event) => {
+elements.barbecueOrganizerEvents.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-cancel-barbecue]");
   if (!button) return;
 
   if (!window.confirm("Cancelar este churrasco?")) return;
 
   try {
-    repository.cancelBarbecue(
+    await repository.cancelBarbecue(
       button.dataset.cancelBarbecue,
       currentAccount()?.id,
     );
@@ -667,16 +932,91 @@ elements.drawGroupSelect.addEventListener("change", () => {
   }
 });
 elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
-elements.drawForm.addEventListener("submit", (event) => { event.preventDefault(); handleDraw(); });
-elements.redrawButton.addEventListener("click", handleDraw);
+elements.drawForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await handleDraw();
+});
+elements.redrawButton.addEventListener("click", async () => {
+  await handleDraw();
+});
 
 // Results
 elements.resultsGroupSelect.addEventListener("change", renderResults);
 elements.resultsDate.addEventListener("change", renderResults);
-elements.pairResultsList.addEventListener("change", (event) => { const input = event.target.closest("[data-result-wins]"); if (!input) return; repository.updatePairWins(input.dataset.resultWins, input.value); showToast("Vitórias atualizadas."); });
-elements.manualPairForm.addEventListener("submit", (event) => { event.preventDefault(); elements.manualPairError.textContent = ""; try { repository.addPairResult({ groupId: elements.resultsGroupSelect.value, date: elements.resultsDate.value || today(), leftPlayerId: elements.manualLeftPlayer.value, rightPlayerId: elements.manualRightPlayer.value, wins: elements.manualWins.value }); elements.manualWins.value = 0; renderResults(); showToast("Dupla registrada."); } catch (error) { elements.manualPairError.textContent = error.message; } });
+elements.pairResultsList.addEventListener("change", async (event) => {
+  const input = event.target.closest("[data-result-wins]");
+  if (!input) return;
+
+  const groupId = elements.resultsGroupSelect.value;
+  if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+    showToast("Somente o organizador pode alterar os resultados.");
+    renderResults();
+    return;
+  }
+
+  try {
+    await repository.updatePairWins(
+      input.dataset.resultWins,
+      input.value,
+    );
+    showToast("Vitórias atualizadas.");
+  } catch (error) {
+    showToast(error.message);
+    renderResults();
+  }
+});
+elements.manualPairForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.manualPairError.textContent = "";
+
+  const groupId = elements.resultsGroupSelect.value;
+  if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+    elements.manualPairError.textContent =
+      "Somente o organizador pode adicionar pontuação.";
+    return;
+  }
+
+  try {
+    await repository.addPairResult({
+      groupId,
+      date: elements.resultsDate.value || today(),
+      leftPlayerId: elements.manualLeftPlayer.value,
+      rightPlayerId: elements.manualRightPlayer.value,
+      wins: elements.manualWins.value,
+    });
+    elements.manualWins.value = 0;
+    renderResults();
+    showToast("Dupla registrada.");
+  } catch (error) {
+    elements.manualPairError.textContent = error.message;
+  }
+});
 
 // Ranking
 elements.rankingGroupSelect.addEventListener("change", renderRanking);
 
-if (authService.getCurrentAccount()) enterApp(); else enterAuth();
+await repository.initialize();
+
+if (authService.getCurrentAccount()) {
+  enterApp();
+} else {
+  enterAuth();
+}
+
+supabase.auth.onAuthStateChange((event, session) => {
+  setTimeout(async () => {
+    if (event === "SIGNED_IN" && session?.user) {
+      repository.setAuthenticatedUser(session.user);
+      await repository.sync();
+
+      if (elements.app.classList.contains("is-hidden")) {
+        enterApp();
+      }
+    }
+
+    if (event === "SIGNED_OUT") {
+      repository.setAuthenticatedUser(null);
+      enterAuth();
+    }
+  }, 0);
+});
