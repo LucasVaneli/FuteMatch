@@ -508,7 +508,7 @@ test("excluir patota remove registros relacionados e preserva atletas", () => {
   const state = repository.getState();
   assert.equal(repository.getGroupById(group.id), null);
   assert.equal(state.memberships.some((item) => item.groupId === group.id), false);
-  assert.equal(state.attendances.some((item) => item.groupId === group.id), false);
+  assert.equal(state.attendances.length, 0);
   assert.equal(state.barbecueEvents.some((item) => item.groupId === group.id), false);
   assert.equal(
     state.barbecueConfirmations.some((item) => item.eventId === barbecue.id),
