@@ -947,6 +947,13 @@ elements.pairResultsList.addEventListener("change", async (event) => {
   const input = event.target.closest("[data-result-wins]");
   if (!input) return;
 
+  const groupId = elements.resultsGroupSelect.value;
+  if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+    showToast("Somente o organizador pode alterar os resultados.");
+    renderResults();
+    return;
+  }
+
   try {
     await repository.updatePairWins(
       input.dataset.resultWins,
@@ -962,9 +969,16 @@ elements.manualPairForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   elements.manualPairError.textContent = "";
 
+  const groupId = elements.resultsGroupSelect.value;
+  if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
+    elements.manualPairError.textContent =
+      "Somente o organizador pode adicionar pontuação.";
+    return;
+  }
+
   try {
     await repository.addPairResult({
-      groupId: elements.resultsGroupSelect.value,
+      groupId,
       date: elements.resultsDate.value || today(),
       leftPlayerId: elements.manualLeftPlayer.value,
       rightPlayerId: elements.manualRightPlayer.value,
