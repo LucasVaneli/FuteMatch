@@ -340,15 +340,12 @@ export class FuteMatchRepository {
     };
   }
 
-  setGroupActive(groupId, active) {
+  setGroupActive(groupId, active, actorUserId) {
     const state = this.getState();
-    const group = state.groups.find((item) => item.id === groupId);
-
-    if (!group) {
-      throw new Error("Patota não encontrada.");
-    }
+    const group = this.#assertGroupOrganizer(state, groupId, actorUserId);
 
     group.active = Boolean(active);
+    group.updatedAt = new Date().toISOString();
 
     if (!active && state.currentGroupId === groupId) {
       state.currentGroupId =
@@ -359,6 +356,50 @@ export class FuteMatchRepository {
 
     if (active && !state.currentGroupId) {
       state.currentGroupId = groupId;
+    }
+
+    this.#save(state);
+    return Group.fromJSON(group);
+  }
+
+  deleteGroup(groupId, actorUserId) {
+    const state = this.getState();
+    this.#assertGroupOrganizer(state, groupId, actorUserId);
+
+    const sessionIds = new Set(
+      state.sessions
+        .filter((session) => session.groupId === groupId)
+        .map((session) => session.id),
+    );
+    const barbecueEventIds = new Set(
+      state.barbecueEvents
+        .filter((event) => event.groupId === groupId)
+        .map((event) => event.id),
+    );
+
+    state.pairResults = state.pairResults.filter(
+      (result) => !sessionIds.has(result.sessionId),
+    );
+    state.sessions = state.sessions.filter(
+      (session) => session.groupId !== groupId,
+    );
+    state.barbecueConfirmations = state.barbecueConfirmations.filter(
+      (confirmation) => !barbecueEventIds.has(confirmation.eventId),
+    );
+    state.barbecueEvents = state.barbecueEvents.filter(
+      (event) => event.groupId !== groupId,
+    );
+    state.attendances = state.attendances.filter(
+      (attendance) => attendance.groupId !== groupId,
+    );
+    state.memberships = state.memberships.filter(
+      (membership) => membership.groupId !== groupId,
+    );
+    state.groups = state.groups.filter((group) => group.id !== groupId);
+
+    if (state.currentGroupId === groupId) {
+      state.currentGroupId =
+        state.groups.find((group) => group.active !== false)?.id ?? null;
     }
 
     this.#save(state);
