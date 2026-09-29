@@ -222,7 +222,10 @@ export class SupabaseFuteMatchRepository {
     );
 
     if (!currentStillExists) {
-      this.setCurrentGroup(this.state.groups[0]?.id ?? null);
+      const firstActiveGroup = this.state.groups.find(
+        (group) => group.active !== false,
+      );
+      this.setCurrentGroup(firstActiveGroup?.id ?? null);
     }
   }
 
@@ -409,6 +412,64 @@ export class SupabaseFuteMatchRepository {
     await this.sync();
 
     return this.getGroupById(groupId);
+  }
+
+  async setGroupActive(groupId, active) {
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode alterar o status da patota.");
+    }
+
+    const { data, error } = await this.client
+      .from("groups")
+      .update({
+        active: Boolean(active),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", groupId)
+      .select("id, active")
+      .maybeSingle();
+
+    throwIfError(error);
+
+    if (!data) {
+      throw new Error("Patota não encontrada ou sem permissão.");
+    }
+
+    await this.sync();
+
+    if (!active && this.currentGroupId === groupId) {
+      const nextGroup = this.getGroupsForUser(this.user?.id).find(
+        (group) => group.id !== groupId,
+      );
+      this.setCurrentGroup(nextGroup?.id ?? null);
+    }
+
+    return this.getGroupById(groupId);
+  }
+
+  async deleteGroup(groupId) {
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode excluir a patota.");
+    }
+
+    const { data, error } = await this.client
+      .from("groups")
+      .delete()
+      .eq("id", groupId)
+      .select("id")
+      .maybeSingle();
+
+    throwIfError(error);
+
+    if (!data) {
+      throw new Error("Patota não encontrada ou sem permissão.");
+    }
+
+    if (this.currentGroupId === groupId) {
+      this.setCurrentGroup(null);
+    }
+
+    await this.sync();
   }
 
   async addPlayerToGroup(playerId, groupId) {
