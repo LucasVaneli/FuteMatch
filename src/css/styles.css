@@ -337,3 +337,47 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Cargos da patota */
+.member-role-select {
+  width: auto;
+  min-width: 132px;
+  min-height: 36px;
+  padding: 7px 34px 7px 11px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,.035);
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.role-pill--organizer {
+  border-color: rgba(255,207,51,.24);
+  background: rgba(255,207,51,.08);
+  color: var(--primary);
+}
+
+.role-pill--creator {
+  border-color: rgba(99,230,190,.24);
+  background: rgba(99,230,190,.08);
+  color: var(--success);
+}
+
+@media (max-width: 620px) {
+  .member-role-select {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+}
