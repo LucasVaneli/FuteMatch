@@ -197,10 +197,10 @@
       </section>
 
       <section class="page is-hidden" data-page-section="results">
-        <div class="page-heading"><div><span class="section-kicker">RESULTADOS</span><h1>Resultados da noite</h1><p>Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.</p></div><div class="heading-controls"><select id="results-group-select" class="page-select"></select><input id="results-date" class="page-date" type="date" /></div></div>
+        <div class="page-heading"><div><span class="section-kicker">RESULTADOS</span><h1>Resultados da noite</h1><p id="results-description">Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.</p></div><div class="heading-controls"><select id="results-group-select" class="page-select"></select><input id="results-date" class="page-date" type="date" /></div></div>
         <div class="content-grid content-grid--results">
           <article class="panel"><div class="panel-heading"><div><span class="section-kicker">DUPLAS</span><h2>Vitórias</h2></div></div><div id="pair-results-list" class="pair-results-list"></div></article>
-          <article class="panel"><div class="panel-heading"><div><span class="section-kicker">ADICIONAR</span><h2>Registrar outra dupla</h2></div></div><form id="manual-pair-form" class="form-stack"><label><span>Esquerda</span><select id="manual-left-player"></select></label><label><span>Direita</span><select id="manual-right-player"></select></label><label><span>Vitórias</span><input id="manual-wins" type="number" min="0" value="0" /></label><p id="manual-pair-error" class="form-error"></p><button class="button button--secondary" type="submit">Adicionar dupla</button></form></article>
+          <article id="manual-pair-panel" class="panel"><div class="panel-heading"><div><span class="section-kicker">ADICIONAR</span><h2>Registrar outra dupla</h2></div></div><form id="manual-pair-form" class="form-stack"><label><span>Esquerda</span><select id="manual-left-player"></select></label><label><span>Direita</span><select id="manual-right-player"></select></label><label><span>Vitórias</span><input id="manual-wins" type="number" min="0" value="0" /></label><p id="manual-pair-error" class="form-error"></p><button class="button button--secondary" type="submit">Adicionar dupla</button></form></article>
         </div>
       </section>
 
