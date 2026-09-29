@@ -258,6 +258,7 @@ export class FuteMatchRepository {
         groupId: group.id,
         playerId: ownerPlayerId,
         active: true,
+        role: "organizer",
         joinedAt: new Date().toISOString(),
       });
     }
@@ -434,6 +435,7 @@ export class FuteMatchRepository {
           groupId,
           playerId: player.id,
           active: true,
+          role: "member",
           joinedAt: new Date().toISOString(),
         });
       });
@@ -524,10 +526,35 @@ export class FuteMatchRepository {
     return this.getState().groups
       .filter(
         (group) =>
-          group.ownerUserId === userId &&
+          this.isGroupOrganizer(group.id, userId) &&
           (includeInactive || group.active !== false),
       )
       .map(Group.fromJSON);
+  }
+
+  getMembership(groupId, playerId) {
+    const membership = this.getState().memberships.find(
+      (item) =>
+        item.groupId === groupId &&
+        item.playerId === playerId,
+    );
+
+    return membership
+      ? { ...membership, role: membership.role ?? "member" }
+      : null;
+  }
+
+  getMemberRole(groupId, playerId) {
+    const group = this.getState().groups.find((item) => item.id === groupId);
+
+    if (group?.ownerUserId) {
+      const ownerAccount = this.getAccountById(group.ownerUserId);
+      if (ownerAccount?.playerId === playerId) {
+        return "organizer";
+      }
+    }
+
+    return this.getMembership(groupId, playerId)?.role ?? "member";
   }
 
   isUserInGroup(userId, groupId) {
@@ -536,8 +563,25 @@ export class FuteMatchRepository {
   }
 
   isGroupOrganizer(groupId, userId) {
-    const group = this.getState().groups.find((item) => item.id === groupId);
-    return Boolean(group?.ownerUserId && group.ownerUserId === userId);
+    if (!userId) return false;
+
+    const state = this.getState();
+    const group = state.groups.find((item) => item.id === groupId);
+
+    if (group?.ownerUserId === userId) {
+      return true;
+    }
+
+    const account = state.accounts.find((item) => item.id === userId);
+    if (!account) return false;
+
+    return state.memberships.some(
+      (membership) =>
+        membership.groupId === groupId &&
+        membership.playerId === account.playerId &&
+        membership.active === true &&
+        membership.role === "organizer",
+    );
   }
 
   isPlayerInGroup(playerId, groupId) {
@@ -556,8 +600,22 @@ export class FuteMatchRepository {
       throw new Error("Patota não encontrada.");
     }
 
-    if (!group.ownerUserId || group.ownerUserId !== actorUserId) {
-      throw new Error("Somente o organizador da patota pode gerenciar atletas.");
+    const owner = group.ownerUserId === actorUserId;
+    const actorAccount = state.accounts.find(
+      (account) => account.id === actorUserId,
+    );
+    const organizerMembership = actorAccount
+      ? state.memberships.find(
+          (membership) =>
+            membership.groupId === groupId &&
+            membership.playerId === actorAccount.playerId &&
+            membership.active === true &&
+            membership.role === "organizer",
+        )
+      : null;
+
+    if (!owner && !organizerMembership) {
+      throw new Error("Somente um organizador da patota pode realizar esta ação.");
     }
 
     return group;
@@ -586,6 +644,7 @@ export class FuteMatchRepository {
 
     if (membership) {
       membership.active = true;
+      membership.role = "member";
       membership.joinedAt = new Date().toISOString();
       membership.leftAt = null;
     } else {
@@ -593,11 +652,52 @@ export class FuteMatchRepository {
         groupId,
         playerId,
         active: true,
+        role: "member",
         joinedAt: new Date().toISOString(),
       });
     }
 
     this.#save(state);
+  }
+
+  updateGroupMemberRole(
+    groupId,
+    playerId,
+    role,
+    actorUserId,
+  ) {
+    if (!["member", "organizer"].includes(role)) {
+      throw new Error("Cargo inválido.");
+    }
+
+    const state = this.getState();
+    const group = this.#assertGroupOrganizer(
+      state,
+      groupId,
+      actorUserId,
+    );
+    const ownerAccount = state.accounts.find(
+      (account) => account.id === group.ownerUserId,
+    );
+
+    if (ownerAccount?.playerId === playerId && role !== "organizer") {
+      throw new Error("O criador da patota deve permanecer como organizador.");
+    }
+
+    const membership = state.memberships.find(
+      (item) =>
+        item.groupId === groupId &&
+        item.playerId === playerId &&
+        item.active,
+    );
+
+    if (!membership) {
+      throw new Error("Atleta não encontrado na patota.");
+    }
+
+    membership.role = role;
+    this.#save(state);
+    return { ...membership };
   }
 
   removePlayerFromGroup(playerId, groupId, actorUserId) {
