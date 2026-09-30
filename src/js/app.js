@@ -703,7 +703,18 @@ const renderResults = () => {
     .join("");
 };
 
-const rankingRows = (items) => items.length ? items.map((item, index) => `<div class="ranking-row"><span class="ranking-position">${index + 1}</span><div class="ranking-athlete"><strong>${escapeHtml(item.player.name)}</strong><small>${item.wins} vitórias • ${item.nights} presenças • ${item.barbecues} churrascos</small></div><div class="ranking-score"><strong>${item.totalPoints}</strong><small>pontos</small></div></div>`).join("") : '<div class="empty-state"><span>Ainda não há pontuação.</span></div>';
+const rankingRows = (items) =>
+  items.length
+    ? items
+        .map((item, index) => {
+          const adjustmentLabel = item.manualPoints
+            ? ` • ${item.manualPoints > 0 ? "+" : ""}${item.manualPoints} pts ajuste`
+            : "";
+
+          return `<div class="ranking-row"><span class="ranking-position">${index + 1}</span><div class="ranking-athlete"><strong>${escapeHtml(item.player.name)}</strong><small>${item.wins} vitórias • ${item.nights} presenças • ${item.barbecues} churrascos${adjustmentLabel}</small></div><div class="ranking-score"><strong>${item.totalPoints}</strong><small>pontos</small></div></div>`;
+        })
+        .join("")
+    : '<div class="empty-state"><span>Ainda não há pontuação.</span></div>';
 
 const renderRanking = () => {
   const groups = myGroups();

@@ -666,3 +666,29 @@ test("atleta comum não pode promover membros e criador não pode ser rebaixado"
     /deve permanecer como organizador/i,
   );
 });
+
+
+test("ranking soma pontos manuais sem alterar vitórias, presenças ou churrascos", () => {
+  const repository = createRepository();
+  const group = createGroup(repository);
+  const left = createPlayer(
+    repository,
+    group.id,
+    "Lucas",
+    PLAYER_SIDE.LEFT,
+  );
+
+  const ranking = RankingService.calculate({
+    players: [left],
+    attendances: [],
+    pairResults: [],
+    barbecueConfirmations: [],
+    manualPoints: [{ playerId: left.id, points: 7 }],
+  });
+
+  assert.equal(ranking.left[0].manualPoints, 7);
+  assert.equal(ranking.left[0].wins, 0);
+  assert.equal(ranking.left[0].nights, 0);
+  assert.equal(ranking.left[0].barbecues, 0);
+  assert.equal(ranking.left[0].totalPoints, 7);
+});

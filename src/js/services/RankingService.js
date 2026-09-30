@@ -12,6 +12,7 @@ export class RankingService {
     attendances,
     pairResults,
     barbecueConfirmations = [],
+    manualPoints = [],
   }) {
     const ranking = new Map(
       players.map((player) => [
@@ -21,6 +22,7 @@ export class RankingService {
           attendancePoints: 0,
           barbecuePoints: 0,
           victoryPoints: 0,
+          manualPoints: 0,
           totalPoints: 0,
           nights: 0,
           wins: 0,
@@ -57,11 +59,19 @@ export class RankingService {
       item.barbecuePoints += RANKING_POINTS.BARBECUE;
     });
 
+    manualPoints.forEach((adjustment) => {
+      const item = ranking.get(adjustment.playerId);
+      if (!item) return;
+
+      item.manualPoints += Number(adjustment.points) || 0;
+    });
+
     ranking.forEach((item) => {
       item.totalPoints =
         item.attendancePoints +
         item.barbecuePoints +
-        item.victoryPoints;
+        item.victoryPoints +
+        item.manualPoints;
     });
 
     const sortRanking = (items) =>
