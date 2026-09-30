@@ -109,7 +109,7 @@ export class SupabaseFuteMatchRepository {
         ),
       this.client
         .from("group_members")
-        .select("group_id, user_id, active, joined_at, left_at, role"),
+        .select("group_id, user_id, active, joined_at, left_at, role, manual_points"),
       this.client
         .from("attendance")
         .select("group_id, user_id, event_date, status, updated_at"),
@@ -175,6 +175,7 @@ export class SupabaseFuteMatchRepository {
         joinedAt: row.joined_at,
         leftAt: row.left_at,
         role: row.role ?? "member",
+        manualPoints: Number(row.manual_points) || 0,
       })),
       attendances: (attendanceResult.data ?? []).map((row) => ({
         groupId: row.group_id,
@@ -928,6 +929,17 @@ export class SupabaseFuteMatchRepository {
           eligibleBarbecueEventIds.has(confirmation.eventId),
         )
         .map((item) => ({ ...item })),
+      manualPoints: this.state.memberships
+        .filter(
+          (membership) =>
+            membership.groupId === groupId &&
+            membership.active === true &&
+            Number(membership.manualPoints) !== 0,
+        )
+        .map((membership) => ({
+          playerId: membership.playerId,
+          points: Number(membership.manualPoints) || 0,
+        })),
     };
   }
 }
