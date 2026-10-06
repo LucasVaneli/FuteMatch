@@ -468,9 +468,7 @@ export class SupabaseFuteMatchRepository {
       includeInactive: true,
     }).some((player) => normalizeName(player.name) === normalized);
     const duplicateGuest = this.getGuestsByGroup(groupId).some(
-      (guest) =>
-        normalizeName(guest.name) === normalized &&
-        guest.side === side,
+      (guest) => normalizeName(guest.name) === normalized,
     );
 
     if (duplicatePlayer || duplicateGuest) {
