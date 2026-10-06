@@ -24,7 +24,7 @@ const elements = {
   detailGroupName: $("#detail-group-name"), detailGroupSchedule: $("#detail-group-schedule"), detailMemberCount: $("#detail-member-count"), detailPresentCount: $("#detail-present-count"), detailTime: $("#detail-time"), detailMembers: $("#detail-members"), detailManagementPanel: $("#detail-management-panel"), detailScheduleForm: $("#detail-schedule-form"), detailWeekday: $("#detail-weekday"), detailStartTime: $("#detail-start-time"), detailEndTime: $("#detail-end-time"), detailScheduleError: $("#detail-schedule-error"), detailAddPlayerSelect: $("#detail-add-player-select"), detailAddPlayerButton: $("#detail-add-player-button"), detailAddPlayerError: $("#detail-add-player-error"), detailDeactivateGroupButton: $("#detail-deactivate-group-button"), detailDeleteGroupButton: $("#detail-delete-group-button"),
   attendanceDateLabel: $("#attendance-date-label"), attendanceList: $("#attendance-list"),
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
-  drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
+  drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawGuestPanel: $("#draw-guest-panel"), drawGuestForm: $("#draw-guest-form"), drawGuestName: $("#draw-guest-name"), drawGuestSide: $("#draw-guest-side"), drawGuestError: $("#draw-guest-error"), drawGuestList: $("#draw-guest-list"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
   resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), resultsDescription: $("#results-description"), pairResultsList: $("#pair-results-list"), manualPairPanel: $("#manual-pair-panel"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
   rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
 };
@@ -442,30 +442,66 @@ const renderBarbecue = () => {
     .join("");
 };
 
-const playerOption = (player, checked) => `<label class="player-select-card"><input type="checkbox" data-draw-player="${player.id}" data-player-side="${player.side}" ${checked ? "checked" : ""}/><div class="avatar">${escapeHtml(player.name.charAt(0).toUpperCase())}</div><span class="player-select-card__text"><strong>${escapeHtml(player.name)}</strong><small>${sideLabel(player.side)}</small></span></label>`;
+const participantKey = (participant) =>
+  `${participant.isGuest ? "guest" : "user"}:${participant.id}`;
+
+const participantOption = (participant, checked) =>
+  `<label class="player-select-card ${participant.isGuest ? "player-select-card--guest" : ""}"><input type="checkbox" data-draw-participant="${participantKey(participant)}" data-player-side="${participant.side}" ${checked ? "checked" : ""}/><div class="avatar">${escapeHtml(participant.name.charAt(0).toUpperCase())}</div><span class="player-select-card__text"><strong>${escapeHtml(participant.name)}</strong><small>${participant.isGuest ? "Convidado • " : ""}${sideLabel(participant.side)}</small></span>${participant.isGuest ? '<span class="guest-badge">Convidado</span>' : ""}</label>`;
+
+const renderDrawGuests = (groupId, isOwner) => {
+  elements.drawGuestPanel.classList.toggle("is-hidden", !isOwner);
+  if (!isOwner) return;
+
+  const guests = repository.getGuestsByGroup(groupId);
+  elements.drawGuestList.innerHTML = guests.length
+    ? guests
+        .map(
+          (guest) =>
+            `<div class="guest-row"><div><strong>${escapeHtml(guest.name)}</strong><small>${sideLabel(guest.side)} • não pontua no ranking</small></div><button class="button button--danger button--small" type="button" data-remove-guest="${guest.id}">Remover</button></div>`,
+        )
+        .join("")
+    : '<div class="empty-state empty-state--compact"><span>Nenhum convidado ativo nesta patota.</span></div>';
+};
 
 const updateSelectionSummary = () => {
-  const selected = $$('[data-draw-player]:checked');
-  const left = selected.filter((input) => input.dataset.playerSide === PLAYER_SIDE.LEFT).length;
-  const right = selected.filter((input) => input.dataset.playerSide === PLAYER_SIDE.RIGHT).length;
+  const selected = $$('[data-draw-participant]:checked');
+  const left = selected.filter(
+    (input) => input.dataset.playerSide === PLAYER_SIDE.LEFT,
+  ).length;
+  const right = selected.filter(
+    (input) => input.dataset.playerSide === PLAYER_SIDE.RIGHT,
+  ).length;
   const valid = left >= 2 && left === right;
-  elements.selectionSummaryTitle.textContent = `${selected.length} atletas selecionados`;
-  elements.selectionSummaryDescription.textContent = valid ? `${left} duplas serão formadas.` : `Selecione a mesma quantidade dos dois lados (mínimo 2 + 2).`;
+
+  elements.selectionSummaryTitle.textContent =
+    `${selected.length} participantes selecionados`;
+  elements.selectionSummaryDescription.textContent = valid
+    ? `${left} duplas serão formadas.`
+    : "Selecione a mesma quantidade dos dois lados (mínimo 2 + 2).";
   elements.drawButton.disabled = !valid;
 };
 
 const getSavedPairs = (groupId, date) => {
-  const byId = new Map(
+  const playersById = new Map(
     repository
       .getPlayersByGroup(groupId, { includeInactive: true })
       .map((player) => [player.id, player]),
+  );
+  const guestsById = new Map(
+    repository
+      .getGuestsByGroup(groupId, { includeInactive: true })
+      .map((guest) => [guest.id, guest]),
   );
 
   return repository
     .getPairResults(groupId, date)
     .map((result) => ({
-      leftPlayer: byId.get(result.leftPlayerId),
-      rightPlayer: byId.get(result.rightPlayerId),
+      leftPlayer: result.leftGuestId
+        ? guestsById.get(result.leftGuestId)
+        : playersById.get(result.leftPlayerId),
+      rightPlayer: result.rightGuestId
+        ? guestsById.get(result.rightGuestId)
+        : playersById.get(result.rightPlayerId),
     }))
     .filter((pair) => pair.leftPlayer && pair.rightPlayer);
 };
@@ -482,6 +518,7 @@ const renderDraw = () => {
   drawView.clearError();
 
   if (!selectedId) {
+    elements.drawGuestPanel.classList.add("is-hidden");
     elements.drawEmpty.classList.remove("is-hidden");
     elements.drawContent.classList.add("is-hidden");
     elements.drawEmpty.innerHTML =
@@ -502,6 +539,7 @@ const renderDraw = () => {
   );
 
   if (!attendanceWindow.available) {
+    elements.drawGuestPanel.classList.add("is-hidden");
     elements.drawEmpty.classList.remove("is-hidden");
     elements.drawContent.classList.add("is-hidden");
     elements.drawEmpty.innerHTML =
@@ -515,6 +553,7 @@ const renderDraw = () => {
   );
 
   if (!isOwner) {
+    elements.drawGuestPanel.classList.add("is-hidden");
     elements.drawForm.classList.add("is-hidden");
     elements.redrawButton.classList.add("is-hidden");
 
@@ -532,27 +571,21 @@ const renderDraw = () => {
     return;
   }
 
-  elements.drawForm.classList.remove("is-hidden");
-  elements.redrawButton.classList.remove("is-hidden");
-
-  const players = repository.getPlayersByGroup(selectedId);
-  const left = players.filter(
-    (player) => player.side === PLAYER_SIDE.LEFT,
-  );
-  const right = players.filter(
-    (player) => player.side === PLAYER_SIDE.RIGHT,
-  );
-
-  if (left.length < 2 || right.length < 2) {
-    elements.drawEmpty.classList.remove("is-hidden");
-    elements.drawContent.classList.add("is-hidden");
-    elements.drawEmpty.innerHTML =
-      '<strong>Faltam atletas para o sorteio</strong><span>É preciso ter pelo menos 2 esquerdas e 2 direitas.</span>';
-    return;
-  }
-
   elements.drawEmpty.classList.add("is-hidden");
   elements.drawContent.classList.remove("is-hidden");
+  elements.drawForm.classList.remove("is-hidden");
+  elements.redrawButton.classList.remove("is-hidden");
+  renderDrawGuests(selectedId, true);
+
+  const players = repository.getPlayersByGroup(selectedId);
+  const guests = repository.getGuestsByGroup(selectedId);
+  const participants = [...players, ...guests];
+  const left = participants.filter(
+    (participant) => participant.side === PLAYER_SIDE.LEFT,
+  );
+  const right = participants.filter(
+    (participant) => participant.side === PLAYER_SIDE.RIGHT,
+  );
 
   const attendance = repository.getAttendance(
     selectedId,
@@ -565,22 +598,35 @@ const renderDraw = () => {
       .map((item) => item.playerId),
   );
 
-  elements.leftPlayerOptions.innerHTML = left
-    .map((player) =>
-      playerOption(
-        player,
-        hasResponses ? presentIds.has(player.id) : true,
-      ),
-    )
-    .join("");
-  elements.rightPlayerOptions.innerHTML = right
-    .map((player) =>
-      playerOption(
-        player,
-        hasResponses ? presentIds.has(player.id) : true,
-      ),
-    )
-    .join("");
+  elements.leftPlayerOptions.innerHTML = left.length
+    ? left
+        .map((participant) =>
+          participantOption(
+            participant,
+            participant.isGuest
+              ? true
+              : hasResponses
+                ? presentIds.has(participant.id)
+                : true,
+          ),
+        )
+        .join("")
+    : '<div class="side-empty">Nenhum participante de esquerda.</div>';
+
+  elements.rightPlayerOptions.innerHTML = right.length
+    ? right
+        .map((participant) =>
+          participantOption(
+            participant,
+            participant.isGuest
+              ? true
+              : hasResponses
+                ? presentIds.has(participant.id)
+                : true,
+          ),
+        )
+        .join("")
+    : '<div class="side-empty">Nenhum participante de direita.</div>';
 
   updateSelectionSummary();
 
@@ -591,9 +637,24 @@ const renderDraw = () => {
 
 const getSelectedPlayers = () => {
   const groupId = elements.drawGroupSelect.value;
-  const selectedIds = new Set($$('[data-draw-player]:checked').map((input) => input.dataset.drawPlayer));
-  const selected = repository.getPlayersByGroup(groupId).filter((player) => selectedIds.has(player.id));
-  return { leftPlayers: selected.filter((player) => player.side === PLAYER_SIDE.LEFT), rightPlayers: selected.filter((player) => player.side === PLAYER_SIDE.RIGHT) };
+  const selectedKeys = new Set(
+    $$('[data-draw-participant]:checked').map(
+      (input) => input.dataset.drawParticipant,
+    ),
+  );
+  const participants = [
+    ...repository.getPlayersByGroup(groupId),
+    ...repository.getGuestsByGroup(groupId),
+  ].filter((participant) => selectedKeys.has(participantKey(participant)));
+
+  return {
+    leftPlayers: participants.filter(
+      (participant) => participant.side === PLAYER_SIDE.LEFT,
+    ),
+    rightPlayers: participants.filter(
+      (participant) => participant.side === PLAYER_SIDE.RIGHT,
+    ),
+  };
 };
 
 const handleDraw = async () => {
@@ -604,6 +665,7 @@ const handleDraw = async () => {
     if (!repository.isGroupOrganizer(groupId, currentAccount()?.id)) {
       throw new Error("Somente o organizador pode realizar o sorteio.");
     }
+
     const { leftPlayers, rightPlayers } = getSelectedPlayers();
     const pairs = DrawService.createPairs(leftPlayers, rightPlayers);
     const attendanceWindow = repository.getAttendanceWindow(
@@ -622,8 +684,26 @@ const handleDraw = async () => {
     );
     drawView.renderPairs(pairs);
     showToast("Duplas salvas para os resultados da noite.");
-  } catch (error) { drawView.showError(error.message); }
+  } catch (error) {
+    drawView.showError(error.message);
+  }
 };
+
+const participantSelectValue = (participant) =>
+  `${participant.isGuest ? "guest" : "user"}:${participant.id}`;
+
+const parseParticipantSelectValue = (value) => {
+  const [kind, id] = String(value ?? "").split(":");
+  if (!id || !["user", "guest"].includes(kind)) {
+    throw new Error("Participante inválido.");
+  }
+  return { kind, id };
+};
+
+const participantResultHtml = (participant) =>
+  participant
+    ? `<strong>${escapeHtml(participant.name)}</strong>${participant.isGuest ? '<span class="guest-badge">Convidado</span>' : ""}`
+    : "<strong>Participante</strong>";
 
 const renderResults = () => {
   const groups = myGroups();
@@ -652,27 +732,35 @@ const renderResults = () => {
   const players = repository.getPlayersByGroup(groupId, {
     includeInactive: true,
   });
-  const byId = new Map(
-    players.map((player) => [player.id, player]),
-  );
+  const guests = repository.getGuestsByGroup(groupId, {
+    includeInactive: true,
+  });
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const guestsById = new Map(guests.map((guest) => [guest.id, guest]));
   const results = repository.getPairResults(groupId, date);
 
   elements.resultsDescription.innerHTML = isOwner
-    ? 'Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto para cada atleta</strong>.'
-    : 'Visualização dos resultados lançados pelo organizador. Cada vitória vale <strong>1 ponto para cada atleta</strong>.';
+    ? 'Informe quantas partidas cada dupla ganhou. Cada vitória vale <strong>1 ponto apenas para atletas cadastrados</strong>; convidados não pontuam.'
+    : 'Visualização dos resultados lançados pelo organizador. <strong>Convidados não pontuam</strong> no ranking.';
 
   elements.manualPairPanel.classList.toggle("is-hidden", !isOwner);
 
   elements.pairResultsList.innerHTML = results.length
     ? results
-        .map(
-          (result) =>
-            `<div class="pair-result-row"><div class="pair-result-row__pair"><strong>${escapeHtml(byId.get(result.leftPlayerId)?.name ?? "Atleta")}</strong><span>+</span><strong>${escapeHtml(byId.get(result.rightPlayerId)?.name ?? "Atleta")}</strong></div>${
-              isOwner
-                ? `<label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label>`
-                : `<div class="win-readonly"><strong>${result.wins}</strong><span>${Number(result.wins) === 1 ? "vitória" : "vitórias"}</span></div>`
-            }</div>`,
-        )
+        .map((result) => {
+          const leftParticipant = result.leftGuestId
+            ? guestsById.get(result.leftGuestId)
+            : playersById.get(result.leftPlayerId);
+          const rightParticipant = result.rightGuestId
+            ? guestsById.get(result.rightGuestId)
+            : playersById.get(result.rightPlayerId);
+
+          return `<div class="pair-result-row"><div class="pair-result-row__pair">${participantResultHtml(leftParticipant)}<span>+</span>${participantResultHtml(rightParticipant)}</div>${
+            isOwner
+              ? `<label class="win-control"><span>Vitórias</span><input type="number" min="0" value="${result.wins}" data-result-wins="${result.id}" /></label>`
+              : `<div class="win-readonly"><strong>${result.wins}</strong><span>${Number(result.wins) === 1 ? "vitória" : "vitórias"}</span></div>`
+          }</div>`;
+        })
         .join("")
     : `<div class="empty-state"><strong>Nenhuma dupla registrada</strong><span>${
         isOwner
@@ -682,25 +770,20 @@ const renderResults = () => {
 
   if (!isOwner) return;
 
-  const left = players.filter(
-    (player) => player.side === PLAYER_SIDE.LEFT,
+  const activePlayers = repository.getPlayersByGroup(groupId);
+  const activeGuests = repository.getGuestsByGroup(groupId);
+  const left = [...activePlayers, ...activeGuests].filter(
+    (participant) => participant.side === PLAYER_SIDE.LEFT,
   );
-  const right = players.filter(
-    (player) => player.side === PLAYER_SIDE.RIGHT,
+  const right = [...activePlayers, ...activeGuests].filter(
+    (participant) => participant.side === PLAYER_SIDE.RIGHT,
   );
 
-  elements.manualLeftPlayer.innerHTML = left
-    .map(
-      (player) =>
-        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
-    )
-    .join("");
-  elements.manualRightPlayer.innerHTML = right
-    .map(
-      (player) =>
-        `<option value="${player.id}">${escapeHtml(player.name)}</option>`,
-    )
-    .join("");
+  const optionHtml = (participant) =>
+    `<option value="${participantSelectValue(participant)}">${escapeHtml(participant.name)}${participant.isGuest ? " — Convidado" : ""}</option>`;
+
+  elements.manualLeftPlayer.innerHTML = left.map(optionHtml).join("");
+  elements.manualRightPlayer.innerHTML = right.map(optionHtml).join("");
 };
 
 const rankingRows = (items) =>
@@ -1091,7 +1174,50 @@ elements.drawGroupSelect.addEventListener("change", () => {
     renderDraw();
   }
 });
-elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
+
+elements.drawGuestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.drawGuestError.textContent = "";
+
+  const groupId = elements.drawGroupSelect.value;
+
+  try {
+    await repository.addGuest({
+      groupId,
+      name: elements.drawGuestName.value,
+      side: elements.drawGuestSide.value,
+    });
+    elements.drawGuestName.value = "";
+    renderDraw();
+    showToast("Convidado adicionado ao sorteio.");
+  } catch (error) {
+    elements.drawGuestError.textContent = error.message;
+  }
+});
+
+elements.drawGuestList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-guest]");
+  if (!button) return;
+
+  const guest = repository.getGuestById(button.dataset.removeGuest);
+  if (!guest) return;
+
+  if (!window.confirm(`Remover ${guest.name} dos convidados ativos?`)) return;
+
+  try {
+    await repository.setGuestActive(guest.id, false);
+    renderDraw();
+    showToast(`${guest.name} foi removido dos próximos sorteios.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+elements.drawForm.addEventListener("change", (event) => {
+  if (event.target.matches("[data-draw-participant]")) {
+    drawView.clearResults();
+    updateSelectionSummary();
+  }
+});
 elements.drawForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await handleDraw();
@@ -1137,11 +1263,24 @@ elements.manualPairForm.addEventListener("submit", async (event) => {
   }
 
   try {
+    const leftParticipant = parseParticipantSelectValue(
+      elements.manualLeftPlayer.value,
+    );
+    const rightParticipant = parseParticipantSelectValue(
+      elements.manualRightPlayer.value,
+    );
+
     await repository.addPairResult({
       groupId,
       date: elements.resultsDate.value || today(),
-      leftPlayerId: elements.manualLeftPlayer.value,
-      rightPlayerId: elements.manualRightPlayer.value,
+      leftPlayerId:
+        leftParticipant.kind === "user" ? leftParticipant.id : null,
+      leftGuestId:
+        leftParticipant.kind === "guest" ? leftParticipant.id : null,
+      rightPlayerId:
+        rightParticipant.kind === "user" ? rightParticipant.id : null,
+      rightGuestId:
+        rightParticipant.kind === "guest" ? rightParticipant.id : null,
       wins: elements.manualWins.value,
     });
     elements.manualWins.value = 0;

@@ -692,3 +692,98 @@ test("ranking soma pontos manuais sem alterar vitórias, presenças ou churrasco
   assert.equal(ranking.left[0].barbecues, 0);
   assert.equal(ranking.left[0].totalPoints, 7);
 });
+
+
+test("organizador adiciona convidado sem criar jogador ou conta", () => {
+  const repository = createRepository();
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+  });
+
+  assert.throws(
+    () =>
+      repository.addGuest(
+        {
+          groupId: group.id,
+          name: "Convidado",
+          side: PLAYER_SIDE.RIGHT,
+        },
+        "other-user",
+      ),
+    /somente o organizador/i,
+  );
+
+  const guest = repository.addGuest(
+    {
+      groupId: group.id,
+      name: "Convidado",
+      side: PLAYER_SIDE.RIGHT,
+    },
+    "owner-user",
+  );
+
+  assert.equal(guest.isGuest, true);
+  assert.equal(repository.getGuestsByGroup(group.id).length, 1);
+  assert.equal(
+    repository.getPlayersByGroup(group.id).some(
+      (player) => player.name === "Convidado",
+    ),
+    false,
+  );
+  assert.equal(
+    repository.getAccounts().some(
+      (account) => account.playerId === guest.id,
+    ),
+    false,
+  );
+
+  repository.setGuestActive(guest.id, false, "owner-user");
+  assert.equal(repository.getGuestsByGroup(group.id).length, 0);
+  assert.equal(
+    repository.getGuestsByGroup(group.id, { includeInactive: true }).length,
+    1,
+  );
+});
+
+test("vitórias com convidado pontuam somente para o atleta cadastrado", () => {
+  const repository = createRepository();
+  const group = createGroup(repository, {
+    ownerUserId: "owner-user",
+  });
+  const left = createPlayer(
+    repository,
+    group.id,
+    "Atleta",
+    PLAYER_SIDE.LEFT,
+  );
+  const guest = repository.addGuest(
+    {
+      groupId: group.id,
+      name: "Convidado",
+      side: PLAYER_SIDE.RIGHT,
+    },
+    "owner-user",
+  );
+  const date = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+
+  const result = repository.addPairResult({
+    groupId: group.id,
+    date,
+    leftPlayerId: left.id,
+    rightGuestId: guest.id,
+    wins: 4,
+  });
+
+  assert.equal(result.leftPlayerId, left.id);
+  assert.equal(result.rightPlayerId, null);
+  assert.equal(result.rightGuestId, guest.id);
+
+  const ranking = RankingService.calculate(
+    repository.getRankingData(group.id, { asOfDate: date }),
+  );
+
+  assert.equal(ranking.left[0].player.id, left.id);
+  assert.equal(ranking.left[0].wins, 4);
+  assert.equal(ranking.left[0].victoryPoints, 4);
+  assert.equal(ranking.right.length, 0);
+});

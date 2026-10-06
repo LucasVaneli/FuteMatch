@@ -8,6 +8,7 @@ const initialState = () => ({
   groups: [],
   players: [],
   memberships: [],
+  guests: [],
   accounts: [],
   sessions: [],
   attendances: [],
@@ -27,6 +28,9 @@ const normalize = (value) =>
 
 const matchesActiveStatus = (item, active) =>
   active === null ? true : (item.active !== false) === active;
+
+const participantKey = (playerId, guestId) =>
+  playerId ? `user:${playerId}` : `guest:${guestId}`;
 
 const isValidTime = (value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value ?? "");
 const isValidDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
@@ -398,6 +402,9 @@ export class FuteMatchRepository {
     state.memberships = state.memberships.filter(
       (membership) => membership.groupId !== groupId,
     );
+    state.guests = state.guests.filter(
+      (guest) => guest.groupId !== groupId,
+    );
     state.groups = state.groups.filter((group) => group.id !== groupId);
 
     if (state.currentGroupId === groupId) {
@@ -591,6 +598,81 @@ export class FuteMatchRepository {
         membership.groupId === groupId &&
         membership.active,
     );
+  }
+
+  getGuestsByGroup(groupId, { includeInactive = false } = {}) {
+    return this.getState().guests
+      .filter(
+        (guest) =>
+          guest.groupId === groupId &&
+          (includeInactive || guest.active !== false),
+      )
+      .map((guest) => ({ ...guest, isGuest: true }));
+  }
+
+  getGuestById(guestId) {
+    const guest = this.getState().guests.find((item) => item.id === guestId);
+    return guest ? { ...guest, isGuest: true } : null;
+  }
+
+  addGuest({ groupId, name, side }, actorUserId) {
+    const state = this.getState();
+    this.#assertGroupOrganizer(state, groupId, actorUserId);
+
+    const trimmedName = String(name ?? "").trim();
+    if (!trimmedName) {
+      throw new Error("Informe o nome do convidado.");
+    }
+
+    if (!["left", "right"].includes(side)) {
+      throw new Error("Informe o lado do convidado.");
+    }
+
+    const normalized = normalize(trimmedName);
+    const duplicatePlayer = this.getPlayersByGroup(groupId, {
+      includeInactive: true,
+    }).some((player) => normalize(player.name) === normalized);
+    const duplicateGuest = state.guests.some(
+      (guest) =>
+        guest.groupId === groupId &&
+        guest.active !== false &&
+        normalize(guest.name) === normalized,
+    );
+
+    if (duplicatePlayer || duplicateGuest) {
+      throw new Error("Já existe um participante com esse nome nesta patota.");
+    }
+
+    const guest = {
+      id: crypto.randomUUID(),
+      groupId,
+      name: trimmedName,
+      side,
+      active: true,
+      createdBy: actorUserId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isGuest: true,
+    };
+
+    state.guests.push(guest);
+    this.#save(state);
+    return { ...guest };
+  }
+
+  setGuestActive(guestId, active, actorUserId) {
+    const state = this.getState();
+    const guest = state.guests.find((item) => item.id === guestId);
+
+    if (!guest) {
+      throw new Error("Convidado não encontrado.");
+    }
+
+    this.#assertGroupOrganizer(state, guest.groupId, actorUserId);
+    guest.active = Boolean(active);
+    guest.updatedAt = new Date().toISOString();
+    this.#save(state);
+    return { ...guest, isGuest: true };
   }
 
   #assertGroupOrganizer(state, groupId, actorUserId) {
@@ -1019,7 +1101,7 @@ export class FuteMatchRepository {
 
     const winsByPair = new Map(
       previous.map((item) => [
-        `${item.leftPlayerId}:${item.rightPlayerId}`,
+        `${participantKey(item.leftPlayerId, item.leftGuestId)}:${participantKey(item.rightPlayerId, item.rightGuestId)}`,
         item.wins,
       ]),
     );
@@ -1029,12 +1111,27 @@ export class FuteMatchRepository {
     );
 
     pairs.forEach((pair) => {
-      const key = `${pair.leftPlayer.id}:${pair.rightPlayer.id}`;
+      const leftPlayerId = pair.leftPlayer.isGuest
+        ? null
+        : pair.leftPlayer.id;
+      const leftGuestId = pair.leftPlayer.isGuest
+        ? pair.leftPlayer.id
+        : null;
+      const rightPlayerId = pair.rightPlayer.isGuest
+        ? null
+        : pair.rightPlayer.id;
+      const rightGuestId = pair.rightPlayer.isGuest
+        ? pair.rightPlayer.id
+        : null;
+      const key = `${participantKey(leftPlayerId, leftGuestId)}:${participantKey(rightPlayerId, rightGuestId)}`;
+
       state.pairResults.push({
         id: crypto.randomUUID(),
         sessionId: session.id,
-        leftPlayerId: pair.leftPlayer.id,
-        rightPlayerId: pair.rightPlayer.id,
+        leftPlayerId,
+        rightPlayerId,
+        leftGuestId,
+        rightGuestId,
         wins: winsByPair.get(key) ?? 0,
       });
     });
@@ -1043,32 +1140,59 @@ export class FuteMatchRepository {
     return this.getPairResults(groupId, date);
   }
 
-  addPairResult({ groupId, date, leftPlayerId, rightPlayerId, wins = 0 }) {
+  addPairResult({
+    groupId,
+    date,
+    leftPlayerId = null,
+    rightPlayerId = null,
+    leftGuestId = null,
+    rightGuestId = null,
+    wins = 0,
+  }) {
     const state = this.getState();
     const session = this.#getOrCreateSessionInState(state, groupId, date);
 
-    if (leftPlayerId === rightPlayerId) {
-      throw new Error("Escolha dois atletas diferentes.");
+    if (
+      Number(Boolean(leftPlayerId)) + Number(Boolean(leftGuestId)) !== 1 ||
+      Number(Boolean(rightPlayerId)) + Number(Boolean(rightGuestId)) !== 1
+    ) {
+      throw new Error("Informe um participante válido para cada lado.");
     }
 
-    const left = state.players.find((item) => item.id === leftPlayerId);
-    const right = state.players.find((item) => item.id === rightPlayerId);
+    const left = leftPlayerId
+      ? state.players.find((item) => item.id === leftPlayerId)
+      : state.guests.find(
+          (item) =>
+            item.id === leftGuestId &&
+            item.groupId === groupId &&
+            item.active !== false,
+        );
+    const right = rightPlayerId
+      ? state.players.find((item) => item.id === rightPlayerId)
+      : state.guests.find(
+          (item) =>
+            item.id === rightGuestId &&
+            item.groupId === groupId &&
+            item.active !== false,
+        );
 
     if (!left || !right) {
-      throw new Error("Atleta não encontrado.");
+      throw new Error("Participante não encontrado.");
     }
 
     if (left.side !== "left" || right.side !== "right") {
       throw new Error(
-        "A dupla precisa ter um atleta de esquerda e um de direita.",
+        "A dupla precisa ter um participante de esquerda e um de direita.",
       );
     }
 
+    const leftKey = participantKey(leftPlayerId, leftGuestId);
+    const rightKey = participantKey(rightPlayerId, rightGuestId);
     const existing = state.pairResults.find(
       (item) =>
         item.sessionId === session.id &&
-        item.leftPlayerId === leftPlayerId &&
-        item.rightPlayerId === rightPlayerId,
+        participantKey(item.leftPlayerId, item.leftGuestId) === leftKey &&
+        participantKey(item.rightPlayerId, item.rightGuestId) === rightKey,
     );
 
     if (existing) {
@@ -1080,6 +1204,8 @@ export class FuteMatchRepository {
       sessionId: session.id,
       leftPlayerId,
       rightPlayerId,
+      leftGuestId,
+      rightGuestId,
       wins: Math.max(0, Number(wins) || 0),
     };
 

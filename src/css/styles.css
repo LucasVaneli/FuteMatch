@@ -671,3 +671,132 @@ input:focus,select:focus{border-color:rgba(255,207,51,.55);box-shadow:0 0 0 4px 
     grid-column: auto;
   }
 }
+
+
+/* Convidados do sorteio */
+.draw-guest-panel {
+  margin-bottom: 16px;
+}
+
+.guest-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.guest-form label,
+.guest-form input,
+.guest-form select {
+  min-width: 0;
+}
+
+.guest-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guest-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+  padding: 11px 12px;
+}
+
+.guest-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.guest-row strong,
+.guest-row small {
+  overflow-wrap: anywhere;
+}
+
+.guest-row small {
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.player-select-card--guest {
+  border-style: dashed;
+  background:
+    linear-gradient(135deg, rgba(255,207,51,.055), rgba(255,255,255,.018));
+}
+
+.guest-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid rgba(255,207,51,.22);
+  border-radius: 999px;
+  background: rgba(255,207,51,.07);
+  color: var(--primary);
+  padding: 4px 8px;
+  font-size: .64rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.side-empty {
+  border: 1px dashed var(--border);
+  border-radius: 13px;
+  padding: 16px;
+  color: var(--muted);
+  font-size: .78rem;
+  text-align: center;
+}
+
+.pair-result-row__pair .guest-badge {
+  margin-left: -2px;
+}
+
+@media (max-width: 760px) {
+  .guest-form {
+    grid-template-columns: minmax(0, 1fr) minmax(120px, .6fr);
+  }
+
+  .guest-form .button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .guest-form {
+    grid-template-columns: 1fr;
+  }
+
+  .guest-form .button {
+    grid-column: auto;
+  }
+
+  .guest-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guest-row .button {
+    width: 100%;
+  }
+
+  .player-select-card {
+    min-width: 0;
+  }
+
+  .player-select-card .guest-badge {
+    margin-left: auto;
+  }
+
+  .pair-result-row__pair {
+    flex-wrap: wrap;
+  }
+}

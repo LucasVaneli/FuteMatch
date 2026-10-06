@@ -21,6 +21,10 @@ export class DrawView {
       fragment.querySelector(".pair-number").textContent = String(index + 1).padStart(2, "0");
       fragment.querySelector(".left-player-name").textContent = pair.leftPlayer.name;
       fragment.querySelector(".right-player-name").textContent = pair.rightPlayer.name;
+      fragment.querySelector(".pair-player--left .player-role").textContent =
+        pair.leftPlayer.isGuest ? "Esquerda • Convidado" : "Esquerda";
+      fragment.querySelector(".pair-player--right .player-role").textContent =
+        pair.rightPlayer.isGuest ? "Direita • Convidado" : "Direita";
       this.pairsList.append(fragment);
     });
 
