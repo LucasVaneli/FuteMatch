@@ -636,8 +636,7 @@ export class FuteMatchRepository {
       (guest) =>
         guest.groupId === groupId &&
         guest.active !== false &&
-        normalize(guest.name) === normalized &&
-        guest.side === side,
+        normalize(guest.name) === normalized,
     );
 
     if (duplicatePlayer || duplicateGuest) {
