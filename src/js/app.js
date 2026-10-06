@@ -1174,7 +1174,50 @@ elements.drawGroupSelect.addEventListener("change", () => {
     renderDraw();
   }
 });
-elements.drawForm.addEventListener("change", (event) => { if (event.target.matches("[data-draw-player]")) { drawView.clearResults(); updateSelectionSummary(); } });
+
+elements.drawGuestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  elements.drawGuestError.textContent = "";
+
+  const groupId = elements.drawGroupSelect.value;
+
+  try {
+    await repository.addGuest({
+      groupId,
+      name: elements.drawGuestName.value,
+      side: elements.drawGuestSide.value,
+    });
+    elements.drawGuestName.value = "";
+    renderDraw();
+    showToast("Convidado adicionado ao sorteio.");
+  } catch (error) {
+    elements.drawGuestError.textContent = error.message;
+  }
+});
+
+elements.drawGuestList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-guest]");
+  if (!button) return;
+
+  const guest = repository.getGuestById(button.dataset.removeGuest);
+  if (!guest) return;
+
+  if (!window.confirm(`Remover ${guest.name} dos convidados ativos?`)) return;
+
+  try {
+    await repository.setGuestActive(guest.id, false);
+    renderDraw();
+    showToast(`${guest.name} foi removido dos próximos sorteios.`);
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+elements.drawForm.addEventListener("change", (event) => {
+  if (event.target.matches("[data-draw-participant]")) {
+    drawView.clearResults();
+    updateSelectionSummary();
+  }
+});
 elements.drawForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await handleDraw();
@@ -1220,11 +1263,24 @@ elements.manualPairForm.addEventListener("submit", async (event) => {
   }
 
   try {
+    const leftParticipant = parseParticipantSelectValue(
+      elements.manualLeftPlayer.value,
+    );
+    const rightParticipant = parseParticipantSelectValue(
+      elements.manualRightPlayer.value,
+    );
+
     await repository.addPairResult({
       groupId,
       date: elements.resultsDate.value || today(),
-      leftPlayerId: elements.manualLeftPlayer.value,
-      rightPlayerId: elements.manualRightPlayer.value,
+      leftPlayerId:
+        leftParticipant.kind === "user" ? leftParticipant.id : null,
+      leftGuestId:
+        leftParticipant.kind === "guest" ? leftParticipant.id : null,
+      rightPlayerId:
+        rightParticipant.kind === "user" ? rightParticipant.id : null,
+      rightGuestId:
+        rightParticipant.kind === "guest" ? rightParticipant.id : null,
       wins: elements.manualWins.value,
     });
     elements.manualWins.value = 0;
