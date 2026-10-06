@@ -205,6 +205,22 @@
         <div class="page-heading"><div><span class="section-kicker">SORTEIO</span><h1>Montar as duplas</h1><p>Use os atletas da patota e salve as duplas para lançar os resultados da noite.</p></div><select id="draw-group-select" class="page-select"></select></div>
         <div id="draw-empty" class="empty-state is-hidden"></div>
         <div id="draw-content" class="is-hidden">
+          <article id="draw-guest-panel" class="panel draw-guest-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="section-kicker">CONVIDADOS</span>
+                <h2>Convidados do sorteio</h2>
+              </div>
+            </div>
+            <p class="muted">Adicione alguém sem criar conta. O convidado participa do sorteio, mas não recebe pontos no ranking.</p>
+            <form id="draw-guest-form" class="guest-form" novalidate>
+              <label><span>Nome</span><input id="draw-guest-name" type="text" maxlength="80" placeholder="Nome do convidado" /></label>
+              <label><span>Lado</span><select id="draw-guest-side"><option value="left">Esquerda</option><option value="right">Direita</option></select></label>
+              <button class="button button--secondary" type="submit">+ Adicionar convidado</button>
+            </form>
+            <p id="draw-guest-error" class="form-error"></p>
+            <div id="draw-guest-list" class="guest-list"></div>
+          </article>
           <form id="draw-form" novalidate>
             <div class="players-grid">
               <fieldset class="side-card side-card--left"><legend><span class="side-dot"></span> Esquerdas</legend><div id="left-player-options" class="player-options"></div></fieldset>
