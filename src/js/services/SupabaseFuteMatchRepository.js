@@ -7,6 +7,7 @@ const initialState = () => ({
   groups: [],
   players: [],
   memberships: [],
+  guests: [],
   attendances: [],
   barbecueEvents: [],
   barbecueConfirmations: [],
@@ -49,6 +50,13 @@ const throwIfError = (error) => {
 const timeLabel = (value) =>
   typeof value === "string" ? value.slice(0, 5) : value;
 
+const normalizeName = (value) =>
+  String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+
 export class SupabaseFuteMatchRepository {
   constructor(client) {
     this.client = client;
@@ -88,6 +96,7 @@ export class SupabaseFuteMatchRepository {
       privateProfileResult,
       groupsResult,
       membershipsResult,
+      guestsResult,
       attendanceResult,
       barbecueEventsResult,
       barbecueConfirmationsResult,
@@ -111,6 +120,9 @@ export class SupabaseFuteMatchRepository {
         .from("group_members")
         .select("group_id, user_id, active, joined_at, left_at, role, manual_points"),
       this.client
+        .from("group_guests")
+        .select("id, group_id, name, side, active, created_by, created_at, updated_at"),
+      this.client
         .from("attendance")
         .select("group_id, user_id, event_date, status, updated_at"),
       this.client
@@ -127,7 +139,7 @@ export class SupabaseFuteMatchRepository {
       this.client
         .from("pair_results")
         .select(
-          "id, session_id, left_user_id, right_user_id, wins, created_at, updated_at",
+          "id, session_id, left_user_id, right_user_id, left_guest_id, right_guest_id, wins, created_at, updated_at",
         ),
     ]);
 
@@ -136,6 +148,7 @@ export class SupabaseFuteMatchRepository {
       privateProfileResult,
       groupsResult,
       membershipsResult,
+      guestsResult,
       attendanceResult,
       barbecueEventsResult,
       barbecueConfirmationsResult,
@@ -177,6 +190,17 @@ export class SupabaseFuteMatchRepository {
         role: row.role ?? "member",
         manualPoints: Number(row.manual_points) || 0,
       })),
+      guests: (guestsResult.data ?? []).map((row) => ({
+        id: row.id,
+        groupId: row.group_id,
+        name: row.name,
+        side: row.side,
+        active: row.active,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        isGuest: true,
+      })),
       attendances: (attendanceResult.data ?? []).map((row) => ({
         groupId: row.group_id,
         playerId: row.user_id,
@@ -213,6 +237,8 @@ export class SupabaseFuteMatchRepository {
         sessionId: row.session_id,
         leftPlayerId: row.left_user_id,
         rightPlayerId: row.right_user_id,
+        leftGuestId: row.left_guest_id,
+        rightGuestId: row.right_guest_id,
         wins: row.wins,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -406,6 +432,87 @@ export class SupabaseFuteMatchRepository {
     return Boolean(
       membership?.active === true && membership.role === "organizer",
     );
+  }
+
+  getGuestsByGroup(groupId, { includeInactive = false } = {}) {
+    return this.state.guests
+      .filter(
+        (guest) =>
+          guest.groupId === groupId &&
+          (includeInactive || guest.active !== false),
+      )
+      .map((guest) => ({ ...guest, isGuest: true }));
+  }
+
+  getGuestById(guestId) {
+    const guest = this.state.guests.find((item) => item.id === guestId);
+    return guest ? { ...guest, isGuest: true } : null;
+  }
+
+  async addGuest({ groupId, name, side }) {
+    if (!this.isGroupOrganizer(groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode adicionar convidados.");
+    }
+
+    const trimmedName = String(name ?? "").trim();
+    if (!trimmedName) {
+      throw new Error("Informe o nome do convidado.");
+    }
+
+    if (!["left", "right"].includes(side)) {
+      throw new Error("Informe o lado do convidado.");
+    }
+
+    const normalized = normalizeName(trimmedName);
+    const duplicatePlayer = this.getPlayersByGroup(groupId, {
+      includeInactive: true,
+    }).some((player) => normalizeName(player.name) === normalized);
+    const duplicateGuest = this.getGuestsByGroup(groupId).some(
+      (guest) =>
+        normalizeName(guest.name) === normalized &&
+        guest.side === side,
+    );
+
+    if (duplicatePlayer || duplicateGuest) {
+      throw new Error("Já existe um participante com esse nome nesta patota.");
+    }
+
+    const { data, error } = await this.client
+      .from("group_guests")
+      .insert({
+        group_id: groupId,
+        name: trimmedName,
+        side,
+        created_by: this.user?.id,
+      })
+      .select()
+      .single();
+
+    throwIfError(error);
+    await this.sync();
+    return this.getGuestById(data.id);
+  }
+
+  async setGuestActive(guestId, active) {
+    const guest = this.getGuestById(guestId);
+    if (!guest) {
+      throw new Error("Convidado não encontrado.");
+    }
+
+    if (!this.isGroupOrganizer(guest.groupId, this.user?.id)) {
+      throw new Error("Somente o organizador pode gerenciar convidados.");
+    }
+
+    const { error } = await this.client
+      .from("group_guests")
+      .update({
+        active: Boolean(active),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", guestId);
+
+    throwIfError(error);
+    await this.sync();
   }
 
   async createGroup({ name, weekday, startTime, endTime }) {
@@ -819,8 +926,18 @@ export class SupabaseFuteMatchRepository {
         .insert(
           pairs.map((pair) => ({
             session_id: session.id,
-            left_user_id: pair.leftPlayer.id,
-            right_user_id: pair.rightPlayer.id,
+            left_user_id: pair.leftPlayer.isGuest
+              ? null
+              : pair.leftPlayer.id,
+            left_guest_id: pair.leftPlayer.isGuest
+              ? pair.leftPlayer.id
+              : null,
+            right_user_id: pair.rightPlayer.isGuest
+              ? null
+              : pair.rightPlayer.id,
+            right_guest_id: pair.rightPlayer.isGuest
+              ? pair.rightPlayer.id
+              : null,
             wins: 0,
           })),
         );
@@ -847,8 +964,10 @@ export class SupabaseFuteMatchRepository {
   async addPairResult({
     groupId,
     date,
-    leftPlayerId,
-    rightPlayerId,
+    leftPlayerId = null,
+    rightPlayerId = null,
+    leftGuestId = null,
+    rightGuestId = null,
     wins = 0,
   }) {
     let session = this.state.sessions.find(
@@ -879,6 +998,8 @@ export class SupabaseFuteMatchRepository {
       session_id: session.id,
       left_user_id: leftPlayerId,
       right_user_id: rightPlayerId,
+      left_guest_id: leftGuestId,
+      right_guest_id: rightGuestId,
       wins: Math.max(0, Number(wins) || 0),
     });
 
