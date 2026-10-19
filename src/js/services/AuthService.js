@@ -1,7 +1,32 @@
+const isJwtClockSkewError = (error) =>
+  /jwt issued at future/i.test(String(error?.message ?? error ?? ""));
+
 export class AuthService {
-  constructor(client, repository) {
+  constructor(
+    client,
+    repository,
+    { syncRetryDelayMs = 750 } = {},
+  ) {
     this.client = client;
     this.repository = repository;
+    this.syncRetryDelayMs = syncRetryDelayMs;
+  }
+
+  async #syncAuthenticatedUser(user) {
+    this.repository.setAuthenticatedUser(user);
+
+    try {
+      await this.repository.sync();
+    } catch (error) {
+      if (!isJwtClockSkewError(error)) {
+        throw error;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.syncRetryDelayMs),
+      );
+      await this.repository.sync();
+    }
   }
 
   async register({ email, password, name, birthDate, side }) {
@@ -38,8 +63,7 @@ export class AuthService {
       };
     }
 
-    this.repository.setAuthenticatedUser(data.user);
-    await this.repository.sync();
+    await this.#syncAuthenticatedUser(data.user);
 
     return {
       requiresEmailConfirmation: false,
@@ -54,11 +78,20 @@ export class AuthService {
     });
 
     if (error) {
-      throw new Error("E-mail ou senha inválidos.");
+      const message = String(error.message ?? "");
+      if (
+        error.code === "invalid_credentials" ||
+        /invalid login credentials/i.test(message)
+      ) {
+        throw new Error("E-mail ou senha inválidos.");
+      }
+
+      throw new Error(
+        message || "Não foi possível acessar o Supabase.",
+      );
     }
 
-    this.repository.setAuthenticatedUser(data.user);
-    await this.repository.sync();
+    await this.#syncAuthenticatedUser(data.user);
 
     return this.repository.getCurrentAccount();
   }
