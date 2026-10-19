@@ -141,3 +141,67 @@ test("logout encerra a sessão do Supabase", async () => {
   assert.equal(signedOut, true);
   assert.equal(repository.getCurrentAccount(), null);
 });
+
+
+test("login repete sincronização uma vez quando o JWT é emitido no futuro", async () => {
+  const user = { id: "user-skew", email: accountData.email };
+  const client = {
+    auth: {
+      async signInWithPassword() {
+        return {
+          data: { user, session: { user } },
+          error: null,
+        };
+      },
+    },
+  };
+
+  class ClockSkewRepositoryMock extends RepositoryMock {
+    async sync() {
+      this.syncCount += 1;
+
+      if (this.syncCount === 1) {
+        throw new Error("JWT issued at future");
+      }
+    }
+  }
+
+  const repository = new ClockSkewRepositoryMock();
+  const auth = new AuthService(
+    client,
+    repository,
+    { syncRetryDelayMs: 0 },
+  );
+
+  const account = await auth.login(
+    accountData.email,
+    accountData.password,
+  );
+
+  assert.equal(account.id, "user-skew");
+  assert.equal(repository.syncCount, 2);
+});
+
+test("login não mascara erro de infraestrutura como senha inválida", async () => {
+  const client = {
+    auth: {
+      async signInWithPassword() {
+        return {
+          data: { user: null, session: null },
+          error: {
+            code: "unexpected_failure",
+            message: "Auth service unavailable",
+          },
+        };
+      },
+    },
+  };
+  const repository = new RepositoryMock();
+  const auth = new AuthService(client, repository);
+
+  await assert.rejects(
+    () => auth.login(accountData.email, accountData.password),
+    /Auth service unavailable/,
+  );
+  assert.equal(repository.syncCount, 0);
+});
