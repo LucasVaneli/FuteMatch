@@ -787,3 +787,153 @@ test("vitórias com convidado pontuam somente para o atleta cadastrado", () => {
   assert.equal(ranking.left[0].victoryPoints, 4);
   assert.equal(ranking.right.length, 0);
 });
+
+
+test("organizador confirma presença de membro e soma 2 pontos no ranking", () => {
+  const repository = createRepository();
+
+  repository.createAccount({
+    email: "owner-attendance@example.test",
+    passwordHash: "hash-owner",
+    name: "Organizador Presença",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const ownerAccount = repository.getAccountByEmail(
+    "owner-attendance@example.test",
+  );
+
+  repository.createAccount({
+    email: "member-attendance@example.test",
+    passwordHash: "hash-member",
+    name: "Membro Presença",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const memberAccount = repository.getAccountByEmail(
+    "member-attendance@example.test",
+  );
+
+  const group = createGroup(repository, {
+    ownerUserId: ownerAccount.id,
+    ownerPlayerId: ownerAccount.playerId,
+    weekday: GROUP_WEEKDAY.MONDAY,
+  });
+
+  repository.addPlayerToGroup(
+    memberAccount.playerId,
+    group.id,
+    ownerAccount.id,
+  );
+
+  const eventDate = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+  const votingDate = addDaysToIso(eventDate, -2);
+
+  repository.setAttendance({
+    groupId: group.id,
+    playerId: memberAccount.playerId,
+    date: eventDate,
+    status: "present",
+    currentDate: votingDate,
+    actorUserId: ownerAccount.id,
+  });
+
+  assert.equal(
+    repository.getPlayerAttendance(
+      group.id,
+      memberAccount.playerId,
+      eventDate,
+    ).status,
+    "present",
+  );
+
+  const ranking = RankingService.calculate(
+    repository.getRankingData(group.id, { asOfDate: eventDate }),
+  );
+  const memberRanking = ranking.right.find(
+    (item) => item.player.id === memberAccount.playerId,
+  );
+
+  assert.equal(memberRanking.nights, 1);
+  assert.equal(memberRanking.attendancePoints, 2);
+  assert.equal(memberRanking.totalPoints, 2);
+});
+
+test("atleta comum não pode alterar presença de outro membro", () => {
+  const repository = createRepository();
+
+  repository.createAccount({
+    email: "owner-attendance-guard@example.test",
+    passwordHash: "hash-owner",
+    name: "Criador Presença",
+    birthDate: "1990-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const ownerAccount = repository.getAccountByEmail(
+    "owner-attendance-guard@example.test",
+  );
+
+  repository.createAccount({
+    email: "member-a@example.test",
+    passwordHash: "hash-a",
+    name: "Membro A",
+    birthDate: "1991-01-01",
+    side: PLAYER_SIDE.RIGHT,
+  });
+  const memberA = repository.getAccountByEmail(
+    "member-a@example.test",
+  );
+
+  repository.createAccount({
+    email: "member-b@example.test",
+    passwordHash: "hash-b",
+    name: "Membro B",
+    birthDate: "1992-01-01",
+    side: PLAYER_SIDE.LEFT,
+  });
+  const memberB = repository.getAccountByEmail(
+    "member-b@example.test",
+  );
+
+  const group = createGroup(repository, {
+    ownerUserId: ownerAccount.id,
+    ownerPlayerId: ownerAccount.playerId,
+    weekday: GROUP_WEEKDAY.MONDAY,
+  });
+
+  repository.addPlayerToGroup(
+    memberA.playerId,
+    group.id,
+    ownerAccount.id,
+  );
+  repository.addPlayerToGroup(
+    memberB.playerId,
+    group.id,
+    ownerAccount.id,
+  );
+
+  const eventDate = nextDateForWeekday(GROUP_WEEKDAY.MONDAY);
+  const votingDate = addDaysToIso(eventDate, -2);
+
+  assert.throws(
+    () =>
+      repository.setAttendance({
+        groupId: group.id,
+        playerId: memberB.playerId,
+        date: eventDate,
+        status: "present",
+        currentDate: votingDate,
+        actorUserId: memberA.id,
+      }),
+    /próprio atleta ou um organizador/i,
+  );
+
+  assert.equal(
+    repository.getPlayerAttendance(
+      group.id,
+      memberB.playerId,
+      eventDate,
+    ),
+    null,
+  );
+});
