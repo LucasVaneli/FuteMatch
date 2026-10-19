@@ -293,6 +293,7 @@ const renderGroupDetail = () => {
 const renderAttendance = () => {
   const groups = myGroups();
   const player = currentPlayer();
+  const account = currentAccount();
   const date = today();
 
   elements.attendanceDateLabel.textContent = "Janela • 2 dias antes";
@@ -305,17 +306,27 @@ const renderAttendance = () => {
 
   elements.attendanceList.innerHTML = groups
     .map((group) => {
-      const attendanceWindow = repository.getAttendanceWindow(group.id, date);
+      const attendanceWindow = repository.getAttendanceWindow(
+        group.id,
+        date,
+      );
+      const isOrganizer = repository.isGroupOrganizer(
+        group.id,
+        account?.id,
+      );
 
       if (!attendanceWindow.available) {
         return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${scheduleLabel(group)}</h2></div><span class="status-text">Configuração pendente</span></div><p>O organizador precisa definir o dia da semana desta patota antes de abrir a votação de presença.</p><div class="attendance-locked">Dia da semana ainda não definido.</div></article>`;
       }
 
-      const attendance = repository.getPlayerAttendance(
+      const attendances = repository.getAttendance(
         group.id,
-        player.id,
         attendanceWindow.targetDate,
       );
+      const attendanceByPlayer = new Map(
+        attendances.map((item) => [item.playerId, item]),
+      );
+      const attendance = attendanceByPlayer.get(player.id) ?? null;
       const present = attendance?.status === "present";
       const absent = attendance?.status === "absent";
       const statusClass = present
@@ -339,10 +350,45 @@ const renderAttendance = () => {
             : `${weekdayLabel(group.weekday)}, ${formatDate(attendanceWindow.targetDate)}`;
 
       if (!attendanceWindow.isOpen) {
-        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text">${statusText}</span></div><p>A próxima patota é em <strong>${formatDate(attendanceWindow.targetDate)}</strong>. A votação abre em <strong>${formatDate(attendanceWindow.opensOn)}</strong>, dois dias antes.</p><div class="attendance-locked">🔒 Aguarde a abertura da votação.</div></article>`;
+        return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text">${statusText}</span></div><p>A próxima patota é em <strong>${formatDate(attendanceWindow.targetDate)}</strong>. A votação abre em <strong>${formatDate(attendanceWindow.opensOn)}</strong>, dois dias antes.</p><div class="attendance-locked">🔒 Aguarde a abertura da votação.</div>${isOrganizer ? '<div class="attendance-organizer-hint">Como organizador, você poderá confirmar a presença dos membros assim que a votação abrir.</div>' : ""}</article>`;
       }
 
-      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirme sua presença para <strong>${formatDate(attendanceWindow.targetDate)}</strong>. Participar vale <strong>+2 pontos</strong>.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}" data-attendance-date="${attendanceWindow.targetDate}">✕ Não vou</button></div></article>`;
+      const organizerPanel = isOrganizer
+        ? (() => {
+            const members = repository.getPlayersByGroup(group.id);
+            const presentCount = members.filter(
+              (member) =>
+                attendanceByPlayer.get(member.id)?.status === "present",
+            ).length;
+
+            const rows = members
+              .map((member) => {
+                const memberAttendance =
+                  attendanceByPlayer.get(member.id) ?? null;
+                const memberPresent =
+                  memberAttendance?.status === "present";
+                const memberAbsent =
+                  memberAttendance?.status === "absent";
+                const memberStatus = memberPresent
+                  ? "Presente"
+                  : memberAbsent
+                    ? "Ausente"
+                    : "Pendente";
+                const memberStatusClass = memberPresent
+                  ? "attendance-member-status--present"
+                  : memberAbsent
+                    ? "attendance-member-status--absent"
+                    : "attendance-member-status--pending";
+
+                return `<div class="attendance-member-row"><div class="attendance-member-row__person"><div class="avatar">${escapeHtml(member.name.charAt(0).toUpperCase())}</div><div><strong>${escapeHtml(member.name)}</strong><small>${sideLabel(member.side)}</small></div></div><span class="attendance-member-status ${memberStatusClass}">${memberStatus}</span><div class="attendance-member-row__actions"><button class="button button--success button--small ${memberPresent ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}" data-player-id="${member.id}" data-attendance-date="${attendanceWindow.targetDate}">✓ Presente</button><button class="button button--danger button--small ${memberAbsent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}" data-player-id="${member.id}" data-attendance-date="${attendanceWindow.targetDate}">✕ Ausente</button></div></div>`;
+              })
+              .join("");
+
+            return `<div class="attendance-organizer-panel"><div class="attendance-organizer-panel__head"><div><span class="section-kicker">ORGANIZAÇÃO</span><h3>Gerenciar presença da patota</h3><p>Confirme quem vai jogar. Membros marcados como presentes recebem <strong>+2 pontos</strong> no ranking.</p></div><span class="meta-chip">${presentCount}/${members.length} presentes</span></div><div class="attendance-members-list">${rows}</div></div>`;
+          })()
+        : "";
+
+      return `<article class="attendance-card"><div class="attendance-card__head"><div><span class="section-kicker">${escapeHtml(group.name)}</span><h2>${occurrenceText} • ${group.startTime ?? "--:--"}</h2></div><span class="status-text ${statusClass}">${statusText}</span></div><p>Confirme sua presença para <strong>${formatDate(attendanceWindow.targetDate)}</strong>. Participar vale <strong>+2 pontos</strong>.</p><div class="attendance-actions"><button class="button button--success ${present ? "is-selected" : ""}" type="button" data-attendance="present" data-group-id="${group.id}" data-player-id="${player.id}" data-attendance-date="${attendanceWindow.targetDate}">✓ Vou jogar</button><button class="button button--danger ${absent ? "is-selected" : ""}" type="button" data-attendance="absent" data-group-id="${group.id}" data-player-id="${player.id}" data-attendance-date="${attendanceWindow.targetDate}">✕ Não vou</button></div>${organizerPanel}</article>`;
     })
     .join("");
 };
@@ -1087,21 +1133,36 @@ elements.attendanceList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-attendance]");
   if (!button) return;
 
+  const playerId = button.dataset.playerId ?? currentPlayer().id;
+  const targetPlayer = repository.getPlayerById(playerId);
+  const isOwnAttendance = playerId === currentPlayer().id;
+
   try {
     await repository.setAttendance({
       groupId: button.dataset.groupId,
-    playerId: currentPlayer().id,
-    date: button.dataset.attendanceDate,
-    status: button.dataset.attendance,
+      playerId,
+      date: button.dataset.attendanceDate,
+      status: button.dataset.attendance,
+      actorUserId: currentAccount()?.id,
       currentDate: today(),
     });
 
     renderAttendance();
     renderMyGroups();
+
+    if (isOwnAttendance) {
+      showToast(
+        button.dataset.attendance === "present"
+          ? "Presença confirmada: +2 pontos."
+          : "Ausência registrada.",
+      );
+      return;
+    }
+
     showToast(
       button.dataset.attendance === "present"
-        ? "Presença confirmada: +2 pontos."
-        : "Ausência registrada.",
+        ? `${targetPlayer?.name ?? "Atleta"} confirmado: +2 pontos no ranking.`
+        : `${targetPlayer?.name ?? "Atleta"} marcado como ausente.`,
     );
   } catch (error) {
     showToast(error.message);
