@@ -747,7 +747,50 @@ export class SupabaseFuteMatchRepository {
     );
   }
 
-  async setAttendance({ groupId, playerId, date, status }) {
+  async setAttendance({
+    groupId,
+    playerId,
+    date,
+    status,
+    actorUserId = this.user?.id,
+    currentDate = dateKey(),
+  }) {
+    if (!["present", "absent"].includes(status)) {
+      throw new Error("Status de presença inválido.");
+    }
+
+    if (!this.isPlayerInGroup(playerId, groupId)) {
+      throw new Error("O atleta não pertence a esta patota.");
+    }
+
+    if (
+      actorUserId !== playerId &&
+      !this.isGroupOrganizer(groupId, actorUserId)
+    ) {
+      throw new Error(
+        "Somente o próprio atleta ou um organizador pode alterar esta presença.",
+      );
+    }
+
+    const attendanceWindow = this.getAttendanceWindow(
+      groupId,
+      currentDate,
+    );
+
+    if (!attendanceWindow.available) {
+      throw new Error(attendanceWindow.reason);
+    }
+
+    if (!attendanceWindow.isOpen) {
+      throw new Error("A votação de presença abre 2 dias antes da patota.");
+    }
+
+    if (attendanceWindow.targetDate !== date) {
+      throw new Error(
+        "A presença deve ser confirmada para a próxima patota.",
+      );
+    }
+
     const { error } = await this.client.from("attendance").upsert(
       {
         group_id: groupId,

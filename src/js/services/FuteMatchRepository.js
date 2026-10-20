@@ -1020,6 +1020,7 @@ export class FuteMatchRepository {
     date,
     status,
     currentDate = dateKey(),
+    actorUserId = null,
   }) {
     if (!groupId || !playerId || !date) {
       throw new Error("Dados de presença incompletos.");
@@ -1031,6 +1032,23 @@ export class FuteMatchRepository {
 
     if (!this.isPlayerInGroup(playerId, groupId)) {
       throw new Error("O atleta não pertence a esta patota.");
+    }
+
+    if (actorUserId) {
+      const state = this.getState();
+      const actorAccount = state.accounts.find(
+        (account) => account.id === actorUserId,
+      );
+      const actorPlayerId = actorAccount?.playerId ?? actorUserId;
+
+      if (
+        actorPlayerId !== playerId &&
+        !this.isGroupOrganizer(groupId, actorUserId)
+      ) {
+        throw new Error(
+          "Somente o próprio atleta ou um organizador pode alterar esta presença.",
+        );
+      }
     }
 
     const attendanceWindow = this.getAttendanceWindow(groupId, currentDate);
