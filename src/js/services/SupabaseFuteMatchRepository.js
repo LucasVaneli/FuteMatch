@@ -1060,6 +1060,42 @@ export class SupabaseFuteMatchRepository {
     await this.sync();
   }
 
+  getDashboardData(groupId) {
+    const sessionIds = new Set(
+      this.state.sessions
+        .filter((session) => session.groupId === groupId)
+        .map((session) => session.id),
+    );
+
+    const barbecueEventIds = new Set(
+      this.state.barbecueEvents
+        .filter((event) => event.groupId === groupId)
+        .map((event) => event.id),
+    );
+
+    return {
+      players: this.getPlayersByGroup(groupId, { includeInactive: true }),
+      guests: this.getGuestsByGroup(groupId, { includeInactive: true }),
+      sessions: this.state.sessions
+        .filter((session) => session.groupId === groupId)
+        .map((item) => ({ ...item })),
+      pairResults: this.state.pairResults
+        .filter((result) => sessionIds.has(result.sessionId))
+        .map((item) => ({ ...item })),
+      attendances: this.state.attendances
+        .filter((attendance) => attendance.groupId === groupId)
+        .map((item) => ({ ...item })),
+      barbecueEvents: this.state.barbecueEvents
+        .filter((event) => event.groupId === groupId)
+        .map((item) => ({ ...item })),
+      barbecueConfirmations: this.state.barbecueConfirmations
+        .filter((confirmation) =>
+          barbecueEventIds.has(confirmation.eventId),
+        )
+        .map((item) => ({ ...item })),
+    };
+  }
+
   getRankingData(groupId, { asOfDate = dateKey() } = {}) {
     const sessionIds = new Set(
       this.state.sessions
