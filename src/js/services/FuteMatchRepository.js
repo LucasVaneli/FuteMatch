@@ -1257,6 +1257,47 @@ export class FuteMatchRepository {
       .map((item) => ({ ...item }));
   }
 
+  getDashboardData(groupId) {
+    const state = this.getState();
+    const sessions = state.sessions
+      .filter((session) => session.groupId === groupId)
+      .map((item) => ({ ...item }));
+    const sessionIds = new Set(sessions.map((session) => session.id));
+
+    const barbecueEvents = state.barbecueEvents
+      .filter((event) => event.groupId === groupId)
+      .map((item) => ({ ...item }));
+    const barbecueEventIds = new Set(
+      barbecueEvents.map((event) => event.id),
+    );
+
+    return {
+      players: this.getPlayersByGroup(groupId, { includeInactive: true }),
+      guests: this.getGuestsByGroup(groupId, { includeInactive: true }),
+      sessions,
+      pairResults: state.pairResults
+        .filter((result) => sessionIds.has(result.sessionId))
+        .map((item) => ({ ...item })),
+      attendances: state.attendances
+        .filter((attendance) => sessionIds.has(attendance.sessionId))
+        .map((attendance) => {
+          const session = sessions.find(
+            (item) => item.id === attendance.sessionId,
+          );
+          return {
+            ...attendance,
+            eventDate: session?.date ?? null,
+          };
+        }),
+      barbecueEvents,
+      barbecueConfirmations: state.barbecueConfirmations
+        .filter((confirmation) =>
+          barbecueEventIds.has(confirmation.eventId),
+        )
+        .map((item) => ({ ...item })),
+    };
+  }
+
   getRankingData(groupId, { asOfDate = dateKey() } = {}) {
     const state = this.getState();
     const sessionIds = new Set(

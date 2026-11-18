@@ -2,6 +2,7 @@ import { GROUP_WEEKDAY_LABEL } from "./domain/Group.js";
 import { PLAYER_SIDE } from "./domain/Player.js";
 import { AuthService } from "./services/AuthService.js";
 import { DrawService } from "./services/DrawService.js";
+import { DashboardService } from "./services/DashboardService.js";
 import { SupabaseFuteMatchRepository } from "./services/SupabaseFuteMatchRepository.js";
 import { RankingService } from "./services/RankingService.js";
 import { DrawView } from "./ui/DrawView.js";
@@ -26,7 +27,9 @@ const elements = {
   barbecueList: $("#barbecue-list"), barbecueOrganizerPanel: $("#barbecue-organizer-panel"), barbecueForm: $("#barbecue-form"), barbecueGroupSelect: $("#barbecue-group-select"), barbecueDate: $("#barbecue-date"), barbecueError: $("#barbecue-error"), barbecueOrganizerEvents: $("#barbecue-organizer-events"),
   drawGroupSelect: $("#draw-group-select"), drawEmpty: $("#draw-empty"), drawContent: $("#draw-content"), drawGuestPanel: $("#draw-guest-panel"), drawGuestForm: $("#draw-guest-form"), drawGuestName: $("#draw-guest-name"), drawGuestSide: $("#draw-guest-side"), drawGuestError: $("#draw-guest-error"), drawGuestList: $("#draw-guest-list"), drawForm: $("#draw-form"), leftPlayerOptions: $("#left-player-options"), rightPlayerOptions: $("#right-player-options"), selectionSummaryTitle: $("#selection-summary-title"), selectionSummaryDescription: $("#selection-summary-description"), drawButton: $("#draw-button"), redrawButton: $("#redraw-button"), formError: $("#form-error"), resultsSection: $("#results-section"), pairsList: $("#pairs-list"), pairTemplate: $("#pair-template"),
   resultsGroupSelect: $("#results-group-select"), resultsDate: $("#results-date"), resultsDescription: $("#results-description"), pairResultsList: $("#pair-results-list"), manualPairPanel: $("#manual-pair-panel"), manualPairForm: $("#manual-pair-form"), manualLeftPlayer: $("#manual-left-player"), manualRightPlayer: $("#manual-right-player"), manualWins: $("#manual-wins"), manualPairError: $("#manual-pair-error"),
-  rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"), toast: $("#toast"),
+  rankingGroupSelect: $("#ranking-group-select"), rankingLeft: $("#ranking-left"), rankingRight: $("#ranking-right"),
+  dashboardGroupSelect: $("#dashboard-group-select"), dashboardPeriodSelect: $("#dashboard-period-select"), dashboardStartLabel: $("#dashboard-start-label"), dashboardEndLabel: $("#dashboard-end-label"), dashboardStartDate: $("#dashboard-start-date"), dashboardEndDate: $("#dashboard-end-date"), dashboardEmpty: $("#dashboard-empty"), dashboardContent: $("#dashboard-content"), dashboardTopPlayer: $("#dashboard-top-player"), dashboardTopPlayerDetail: $("#dashboard-top-player-detail"), dashboardTopPair: $("#dashboard-top-pair"), dashboardTopPairDetail: $("#dashboard-top-pair-detail"), dashboardMostPresent: $("#dashboard-most-present"), dashboardMostPresentDetail: $("#dashboard-most-present-detail"), dashboardNights: $("#dashboard-nights"), dashboardTotalWins: $("#dashboard-total-wins"), dashboardTrend: $("#dashboard-trend"), dashboardTopPlayers: $("#dashboard-top-players"), dashboardTopPairs: $("#dashboard-top-pairs"), dashboardPeriodRanking: $("#dashboard-period-ranking"),
+  toast: $("#toast"),
 };
 
 const drawView = new DrawView({ resultsSection: elements.resultsSection, pairsList: elements.pairsList, pairTemplate: elements.pairTemplate, errorElement: elements.formError });
@@ -94,6 +97,7 @@ const showPage = (name) => {
   if (name === "draw") renderDraw();
   if (name === "results") renderResults();
   if (name === "ranking") renderRanking();
+  if (name === "dashboard") renderDashboard();
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
@@ -854,6 +858,229 @@ const renderRanking = () => {
   elements.rankingRight.innerHTML = rankingRows(ranking.right);
 };
 
+const isoFromDate = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const dashboardDateRange = () => {
+  const endDate = elements.dashboardEndDate.value || today();
+  const preset = elements.dashboardPeriodSelect.value;
+  const end = new Date(`${endDate}T12:00:00`);
+
+  if (preset === "all") {
+    return { startDate: null, endDate };
+  }
+
+  if (preset === "custom") {
+    return {
+      startDate: elements.dashboardStartDate.value || null,
+      endDate: elements.dashboardEndDate.value || today(),
+    };
+  }
+
+  if (preset === "year") {
+    return {
+      startDate: `${end.getFullYear()}-01-01`,
+      endDate,
+    };
+  }
+
+  const days = Number(preset);
+  const start = new Date(end);
+  start.setDate(start.getDate() - Math.max(0, days - 1));
+
+  return {
+    startDate: isoFromDate(start),
+    endDate,
+  };
+};
+
+const dashboardEmptyHtml = (message) =>
+  `<div class="empty-state empty-state--compact"><span>${escapeHtml(message)}</span></div>`;
+
+const dashboardBars = (items, valueKey, formatter, limit = 6) => {
+  const rows = items.slice(0, limit);
+  if (!rows.length) {
+    return dashboardEmptyHtml("Ainda não há dados neste período.");
+  }
+
+  const max = Math.max(...rows.map((item) => Number(item[valueKey]) || 0), 1);
+
+  return rows
+    .map((item, index) => {
+      const value = Number(item[valueKey]) || 0;
+      const width = Math.max(4, Math.round((value / max) * 100));
+
+      return `<div class="dashboard-bar-row"><span class="dashboard-bar-position">${index + 1}</span><div class="dashboard-bar-main"><div class="dashboard-bar-label"><strong>${escapeHtml(item.name)}</strong><span>${formatter(item)}</span></div><div class="dashboard-bar-track"><span class="dashboard-bar-fill" style="width:${width}%"></span></div></div></div>`;
+    })
+    .join("");
+};
+
+const dashboardTrendSvg = (items) => {
+  if (!items.length) {
+    return dashboardEmptyHtml("Sem resultados para montar a evolução.");
+  }
+
+  const width = 720;
+  const height = 230;
+  const paddingX = 34;
+  const paddingTop = 24;
+  const paddingBottom = 42;
+  const plotWidth = width - paddingX * 2;
+  const plotHeight = height - paddingTop - paddingBottom;
+  const maxWins = Math.max(...items.map((item) => item.wins), 1);
+  const stepX = items.length > 1 ? plotWidth / (items.length - 1) : 0;
+  const monthLabel = (value) => {
+    const [year, month] = value.split("-").map(Number);
+    return new Intl.DateTimeFormat("pt-BR", {
+      month: "short",
+      year: items.length > 6 ? "2-digit" : undefined,
+    })
+      .format(new Date(year, month - 1, 1))
+      .replace(".", "");
+  };
+
+  const points = items.map((item, index) => {
+    const x = paddingX + (items.length === 1 ? plotWidth / 2 : index * stepX);
+    const y =
+      paddingTop + plotHeight - (item.wins / maxWins) * plotHeight;
+    return { ...item, x, y };
+  });
+
+  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const labels = points
+    .map(
+      (point) =>
+        `<text x="${point.x}" y="${height - 14}" text-anchor="middle">${escapeHtml(monthLabel(point.month))}</text>`,
+    )
+    .join("");
+  const dots = points
+    .map(
+      (point) =>
+        `<circle cx="${point.x}" cy="${point.y}" r="5"><title>${escapeHtml(monthLabel(point.month))}: ${point.wins} vitória(s)</title></circle>`,
+    )
+    .join("");
+
+  return `<div class="dashboard-chart-scroll"><svg class="dashboard-line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolução das vitórias por mês"><line x1="${paddingX}" y1="${paddingTop + plotHeight}" x2="${width - paddingX}" y2="${paddingTop + plotHeight}" class="dashboard-axis"></line><polyline points="${polyline}" class="dashboard-line"></polyline>${dots}<g class="dashboard-chart-labels">${labels}</g><text x="${paddingX}" y="${paddingTop + 2}" class="dashboard-chart-max">${maxWins}</text></svg></div>`;
+};
+
+const renderDashboard = () => {
+  const groups = myGroups();
+  const groupId = groupOptions(
+    elements.dashboardGroupSelect,
+    groups,
+    elements.dashboardGroupSelect.value ||
+      repository.getCurrentGroupId(),
+  );
+
+  const custom = elements.dashboardPeriodSelect.value === "custom";
+  elements.dashboardStartLabel.classList.toggle("is-hidden", !custom);
+  elements.dashboardEndLabel.classList.toggle("is-hidden", !custom);
+
+  if (!elements.dashboardEndDate.value) {
+    elements.dashboardEndDate.value = today();
+  }
+
+  if (
+    custom &&
+    !elements.dashboardStartDate.value
+  ) {
+    const fallback = new Date();
+    fallback.setDate(fallback.getDate() - 29);
+    elements.dashboardStartDate.value = isoFromDate(fallback);
+  }
+
+  if (!groupId) {
+    elements.dashboardEmpty.classList.remove("is-hidden");
+    elements.dashboardContent.classList.add("is-hidden");
+    elements.dashboardEmpty.innerHTML =
+      '<strong>Sem patotas</strong><span>Entre em uma patota para visualizar as estatísticas.</span>';
+    return;
+  }
+
+  const { startDate, endDate } = dashboardDateRange();
+
+  if (startDate && endDate && startDate > endDate) {
+    elements.dashboardEmpty.classList.remove("is-hidden");
+    elements.dashboardContent.classList.add("is-hidden");
+    elements.dashboardEmpty.innerHTML =
+      '<strong>Período inválido</strong><span>A data inicial precisa ser anterior à data final.</span>';
+    return;
+  }
+
+  const dashboard = DashboardService.calculate({
+    ...repository.getDashboardData(groupId),
+    startDate,
+    endDate,
+  });
+
+  const hasData =
+    dashboard.summary.totalWins > 0 ||
+    dashboard.periodRanking.length > 0 ||
+    dashboard.mostPresent;
+
+  elements.dashboardEmpty.classList.toggle("is-hidden", hasData);
+  elements.dashboardContent.classList.toggle("is-hidden", !hasData);
+
+  if (!hasData) {
+    elements.dashboardEmpty.innerHTML =
+      '<strong>Nenhuma estatística no período</strong><span>Escolha outro intervalo ou registre presença/resultados para começar a montar a dashboard.</span>';
+    return;
+  }
+
+  elements.dashboardTopPlayer.textContent =
+    dashboard.mostVictoriousPlayer?.name ?? "—";
+  elements.dashboardTopPlayerDetail.textContent =
+    dashboard.mostVictoriousPlayer
+      ? `${dashboard.mostVictoriousPlayer.wins} vitória(s) em ${dashboard.mostVictoriousPlayer.nights} noite(s)`
+      : "Sem vitórias registradas";
+
+  elements.dashboardTopPair.textContent =
+    dashboard.mostVictoriousPair?.name ?? "—";
+  elements.dashboardTopPairDetail.textContent =
+    dashboard.mostVictoriousPair
+      ? `${dashboard.mostVictoriousPair.wins} vitória(s) em ${dashboard.mostVictoriousPair.nights} noite(s)${dashboard.mostVictoriousPair.hasGuest ? " • com convidado" : ""}`
+      : "Sem duplas registradas";
+
+  elements.dashboardMostPresent.textContent =
+    dashboard.mostPresent?.name ?? "—";
+  elements.dashboardMostPresentDetail.textContent =
+    dashboard.mostPresent
+      ? `${dashboard.mostPresent.attendances} presença(s)`
+      : "Sem presenças registradas";
+
+  elements.dashboardNights.textContent = dashboard.summary.nights;
+  elements.dashboardTotalWins.textContent =
+    `${dashboard.summary.totalWins} vitória(s) registrada(s) • ${dashboard.summary.athletes} atleta(s) ativo(s) no período`;
+
+  elements.dashboardTopPlayers.innerHTML = dashboardBars(
+    dashboard.topPlayers,
+    "wins",
+    (item) => `${item.wins} vitórias • ${item.nights} noites`,
+  );
+
+  elements.dashboardTopPairs.innerHTML = dashboardBars(
+    dashboard.topPairs,
+    "wins",
+    (item) =>
+      `${item.wins} vitórias • ${item.nights} noites${item.hasGuest ? " • convidado" : ""}`,
+  );
+
+  elements.dashboardTrend.innerHTML = dashboardTrendSvg(
+    dashboard.monthlyTrend,
+  );
+
+  elements.dashboardPeriodRanking.innerHTML =
+    dashboard.periodRanking.length
+      ? dashboard.periodRanking
+          .slice(0, 10)
+          .map(
+            (item, index) =>
+              `<div class="dashboard-ranking-row"><span class="dashboard-ranking-position">${index + 1}</span><div class="dashboard-ranking-player"><strong>${escapeHtml(item.player.name)}</strong><small>${sideLabel(item.player.side)} • ${item.wins} vitórias • ${item.attendances} presenças • ${item.barbecues} churrascos</small></div><strong class="dashboard-ranking-points">${item.totalPoints} pts</strong></div>`,
+          )
+          .join("")
+      : dashboardEmptyHtml("Nenhuma pontuação neste período.");
+};
+
 const renderApp = () => {
   renderProfile(); renderMyGroups();
   const groups = myGroups();
@@ -1354,6 +1581,12 @@ elements.manualPairForm.addEventListener("submit", async (event) => {
 
 // Ranking
 elements.rankingGroupSelect.addEventListener("change", renderRanking);
+
+// Dashboard
+elements.dashboardGroupSelect.addEventListener("change", renderDashboard);
+elements.dashboardPeriodSelect.addEventListener("change", renderDashboard);
+elements.dashboardStartDate.addEventListener("change", renderDashboard);
+elements.dashboardEndDate.addEventListener("change", renderDashboard);
 
 await repository.initialize();
 

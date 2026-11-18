@@ -66,6 +66,7 @@
         <button class="nav-item" type="button" data-page="draw"><span>🎲</span> Sorteio</button>
         <button class="nav-item" type="button" data-page="results"><span>🏁</span> Resultados</button>
         <button class="nav-item" type="button" data-page="ranking"><span>🏆</span> Ranking</button>
+        <button class="nav-item" type="button" data-page="dashboard"><span>📊</span> Dashboard</button>
       </nav>
       <div class="sidebar-profile">
         <div class="avatar" id="profile-avatar">L</div>
@@ -250,6 +251,125 @@
           <article class="ranking-board"><div class="ranking-board__heading"><span class="side-dot side-dot--right"></span><div><span>RANKING</span><h2>Direitas</h2></div></div><div id="ranking-right" class="ranking-list"></div></article>
         </div>
       </section>
+
+      <section class="page dashboard-page is-hidden" data-page-section="dashboard">
+        <div class="page-heading dashboard-heading">
+          <div>
+            <span class="section-kicker">ESTATÍSTICAS</span>
+            <h1>Dashboard da patota</h1>
+            <p>Veja quem está voando, as duplas mais vitoriosas e a evolução dos resultados no período.</p>
+          </div>
+        </div>
+
+        <article class="panel dashboard-filters">
+          <label>
+            <span>Patota</span>
+            <select id="dashboard-group-select"></select>
+          </label>
+          <label>
+            <span>Período</span>
+            <select id="dashboard-period-select">
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 3 meses</option>
+              <option value="180">Últimos 6 meses</option>
+              <option value="year" selected>Este ano</option>
+              <option value="all">Todo o histórico</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </label>
+          <label id="dashboard-start-label" class="is-hidden">
+            <span>De</span>
+            <input id="dashboard-start-date" type="date" />
+          </label>
+          <label id="dashboard-end-label" class="is-hidden">
+            <span>Até</span>
+            <input id="dashboard-end-date" type="date" />
+          </label>
+        </article>
+
+        <div id="dashboard-empty" class="empty-state is-hidden"></div>
+
+        <div id="dashboard-content">
+          <div class="dashboard-kpis">
+            <article class="dashboard-kpi dashboard-kpi--highlight">
+              <span class="dashboard-kpi__icon">🏆</span>
+              <div>
+                <span>Mais vitorioso</span>
+                <strong id="dashboard-top-player">—</strong>
+                <small id="dashboard-top-player-detail">Sem dados</small>
+              </div>
+            </article>
+            <article class="dashboard-kpi">
+              <span class="dashboard-kpi__icon">🤝</span>
+              <div>
+                <span>Dupla mais vitoriosa</span>
+                <strong id="dashboard-top-pair">—</strong>
+                <small id="dashboard-top-pair-detail">Sem dados</small>
+              </div>
+            </article>
+            <article class="dashboard-kpi">
+              <span class="dashboard-kpi__icon">👟</span>
+              <div>
+                <span>Mais presente</span>
+                <strong id="dashboard-most-present">—</strong>
+                <small id="dashboard-most-present-detail">Sem dados</small>
+              </div>
+            </article>
+            <article class="dashboard-kpi">
+              <span class="dashboard-kpi__icon">🌙</span>
+              <div>
+                <span>Noites com resultado</span>
+                <strong id="dashboard-nights">0</strong>
+                <small id="dashboard-total-wins">0 vitórias registradas</small>
+              </div>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel dashboard-card dashboard-card--wide">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-kicker">EVOLUÇÃO</span>
+                  <h2>Vitórias ao longo do tempo</h2>
+                </div>
+              </div>
+              <div id="dashboard-trend" class="dashboard-trend"></div>
+            </article>
+
+            <article class="panel dashboard-card">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-kicker">TOP JOGADORES</span>
+                  <h2>Mais vitórias</h2>
+                </div>
+              </div>
+              <div id="dashboard-top-players" class="dashboard-bars"></div>
+            </article>
+
+            <article class="panel dashboard-card">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-kicker">TOP DUPLAS</span>
+                  <h2>Mais vitoriosas</h2>
+                </div>
+              </div>
+              <div id="dashboard-top-pairs" class="dashboard-bars"></div>
+            </article>
+
+            <article class="panel dashboard-card dashboard-card--wide">
+              <div class="panel-heading">
+                <div>
+                  <span class="section-kicker">RANKING DO PERÍODO</span>
+                  <h2>Pontuação no intervalo selecionado</h2>
+                  <p class="muted">Considera presença, vitórias e churrasco. Ajustes manuais antigos ficam fora porque não possuem data.</p>
+                </div>
+              </div>
+              <div id="dashboard-period-ranking" class="dashboard-period-ranking"></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
